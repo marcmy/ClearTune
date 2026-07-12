@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Candidates.h"
 #include "core/Profile.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -7,8 +8,7 @@
 #endif
 #include <windows.h>
 
-#include <d2d1.h>
-#include <dwrite.h>
+#include <dwrite_1.h>
 #include <wrl/client.h>
 
 #include <string>
@@ -25,6 +25,7 @@ public:
         HDC deviceContext,
         const RECT& bounds,
         const ClearTypeProfile& profile,
+        CalibrationStage stage,
         unsigned int dpi,
         bool dark,
         bool selected,
@@ -33,14 +34,9 @@ public:
         std::wstring& error);
 
 private:
-    [[nodiscard]] bool EnsureDeviceResources(std::wstring& error);
-
-    Microsoft::WRL::ComPtr<ID2D1Factory> d2dFactory_;
-    Microsoft::WRL::ComPtr<IDWriteFactory> writeFactory_;
+    Microsoft::WRL::ComPtr<IDWriteFactory1> writeFactory_;
+    Microsoft::WRL::ComPtr<IDWriteGdiInterop> gdiInterop_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> textFormat_;
-    Microsoft::WRL::ComPtr<ID2D1DCRenderTarget> renderTarget_;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> textBrush_;
-    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> borderBrush_;
 };
 
 }  // namespace ctt::win32
