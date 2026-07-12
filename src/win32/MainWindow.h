@@ -47,14 +47,22 @@ private:
     void RefreshPage();
     void MoveToCurrentMonitor();
     void RefreshSampleButtons();
+    void UpdateWelcomeControls();
     void SetControlVisible(HWND control, bool visible) const noexcept;
     void SetText(HWND control, const std::wstring& text) const noexcept;
     void NavigateNext();
     void NavigateBack();
     void SelectSample(std::size_t index);
     void ThemeSelectionChanged();
+    void MonitorSelectionChanged();
+    void PrepareSelectedMonitors();
+    void SkipUnneededResolutionPage(bool movingForward);
     [[nodiscard]] bool ApplySettings(std::wstring& error);
+    [[nodiscard]] const MonitorDescriptor* CurrentMonitor() const noexcept;
+    [[nodiscard]] bool CurrentMonitorNeedsWarning() const noexcept;
     [[nodiscard]] std::wstring CurrentMonitorDescription() const;
+    [[nodiscard]] std::wstring ResolutionWarningText() const;
+    [[nodiscard]] std::wstring MonitorChoiceLabel(std::size_t monitorIndex) const;
     [[nodiscard]] std::wstring SampleInstruction() const;
     [[nodiscard]] bool IsDark() const noexcept;
     [[nodiscard]] int Scale(int value) const noexcept;
@@ -67,6 +75,10 @@ private:
     HWND themeLabel_{};
     HWND themeCombo_{};
     HWND clearTypeCheck_{};
+    HWND clearTypeDescription_{};
+    HWND tuneAllRadio_{};
+    HWND tuneOneRadio_{};
+    HWND monitorCombo_{};
     HWND backButton_{};
     HWND nextButton_{};
     HWND cancelButton_{};
@@ -78,6 +90,7 @@ private:
     UINT dpi_{96};
 
     std::vector<MonitorDescriptor> monitors_;
+    std::vector<std::size_t> activeMonitorIndices_;
     ClearTypeSettingsSession& settings_;
     WizardModel model_;
     ThemeMode themeMode_{ThemeMode::System};
