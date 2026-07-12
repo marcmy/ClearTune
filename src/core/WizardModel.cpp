@@ -10,14 +10,14 @@ constexpr WizardPage NextPageWithinMonitor(const WizardPage page) noexcept {
         case WizardPage::Resolution:
             return WizardPage::PixelStructure;
         case WizardPage::PixelStructure:
-            return WizardPage::Gamma;
-        case WizardPage::Gamma:
-            return WizardPage::ClearTypeLevel;
-        case WizardPage::ClearTypeLevel:
-            return WizardPage::TextContrast;
-        case WizardPage::TextContrast:
             return WizardPage::EnhancedContrast;
         case WizardPage::EnhancedContrast:
+            return WizardPage::ClearTypeLevel;
+        case WizardPage::ClearTypeLevel:
+            return WizardPage::ContrastCombination;
+        case WizardPage::ContrastCombination:
+            return WizardPage::GrayscaleEnhancedContrast;
+        case WizardPage::GrayscaleEnhancedContrast:
             return WizardPage::MonitorComplete;
         default:
             return page;
@@ -27,14 +27,14 @@ constexpr WizardPage NextPageWithinMonitor(const WizardPage page) noexcept {
 constexpr WizardPage PreviousPageWithinMonitor(const WizardPage page) noexcept {
     switch (page) {
         case WizardPage::MonitorComplete:
-            return WizardPage::EnhancedContrast;
-        case WizardPage::EnhancedContrast:
-            return WizardPage::TextContrast;
-        case WizardPage::TextContrast:
+            return WizardPage::GrayscaleEnhancedContrast;
+        case WizardPage::GrayscaleEnhancedContrast:
+            return WizardPage::ContrastCombination;
+        case WizardPage::ContrastCombination:
             return WizardPage::ClearTypeLevel;
         case WizardPage::ClearTypeLevel:
-            return WizardPage::Gamma;
-        case WizardPage::Gamma:
+            return WizardPage::EnhancedContrast;
+        case WizardPage::EnhancedContrast:
             return WizardPage::PixelStructure;
         case WizardPage::PixelStructure:
             return WizardPage::Resolution;
@@ -60,22 +60,22 @@ std::size_t WizardModel::MonitorCount() const noexcept { return profiles_.size()
 bool WizardModel::IsMonitorCompletePage() const noexcept { return page_ == WizardPage::MonitorComplete; }
 
 bool WizardModel::IsSamplePage() const noexcept {
-    return page_ >= WizardPage::PixelStructure && page_ <= WizardPage::EnhancedContrast;
+    return page_ >= WizardPage::PixelStructure && page_ <= WizardPage::GrayscaleEnhancedContrast;
 }
 
 CalibrationStage WizardModel::CurrentStage() const noexcept {
     switch (page_) {
         case WizardPage::PixelStructure:
             return CalibrationStage::PixelStructure;
-        case WizardPage::Gamma:
-            return CalibrationStage::Gamma;
+        case WizardPage::EnhancedContrast:
+            return CalibrationStage::EnhancedContrast;
         case WizardPage::ClearTypeLevel:
             return CalibrationStage::ClearTypeLevel;
-        case WizardPage::TextContrast:
-            return CalibrationStage::TextContrast;
-        case WizardPage::EnhancedContrast:
+        case WizardPage::ContrastCombination:
+            return CalibrationStage::ContrastCombination;
+        case WizardPage::GrayscaleEnhancedContrast:
         default:
-            return CalibrationStage::EnhancedContrast;
+            return CalibrationStage::GrayscaleEnhancedContrast;
     }
 }
 
@@ -83,8 +83,7 @@ std::size_t WizardModel::SelectedCandidateIndex() const noexcept {
     if (!IsSamplePage()) {
         return 0;
     }
-    const auto stage = CurrentStage();
-    return NearestCandidateIndex(stage, ValueForStage(CurrentProfile(), stage));
+    return NearestCandidateIndex(CurrentStage(), CurrentProfile());
 }
 
 const ClearTypeProfile& WizardModel::CurrentProfile() const noexcept { return profiles_[currentMonitor_]; }
@@ -99,10 +98,10 @@ bool WizardModel::Next() noexcept {
             return true;
         case WizardPage::Resolution:
         case WizardPage::PixelStructure:
-        case WizardPage::Gamma:
-        case WizardPage::ClearTypeLevel:
-        case WizardPage::TextContrast:
         case WizardPage::EnhancedContrast:
+        case WizardPage::ClearTypeLevel:
+        case WizardPage::ContrastCombination:
+        case WizardPage::GrayscaleEnhancedContrast:
             page_ = NextPageWithinMonitor(page_);
             return true;
         case WizardPage::MonitorComplete:
@@ -138,10 +137,10 @@ bool WizardModel::Back() noexcept {
             }
             return true;
         case WizardPage::PixelStructure:
-        case WizardPage::Gamma:
-        case WizardPage::ClearTypeLevel:
-        case WizardPage::TextContrast:
         case WizardPage::EnhancedContrast:
+        case WizardPage::ClearTypeLevel:
+        case WizardPage::ContrastCombination:
+        case WizardPage::GrayscaleEnhancedContrast:
         case WizardPage::MonitorComplete:
             page_ = PreviousPageWithinMonitor(page_);
             return true;
