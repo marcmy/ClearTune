@@ -1,6 +1,7 @@
 #include "core/Candidates.h"
 #include "core/Conversions.h"
 #include "core/DisplayKey.h"
+#include "core/Resolution.h"
 #include "core/Theme.h"
 #include "core/WizardModel.h"
 
@@ -38,6 +39,12 @@ int main() {
     CHECK(ctt::NormalizeDisplayKey(L"\\\\.\\DISPLAY7") == L"DISPLAY7");
     CHECK(ctt::NormalizeDisplayKey(L"DISPLAY2") == L"DISPLAY2");
     CHECK(ctt::NormalizeDisplayKey(L"\\\\?\\DISPLAY3") == L"\\\\?\\DISPLAY3");
+
+    CHECK(ctt::MeetsOrExceedsPreferredResolution(1920, 1080, 1920, 1080, false));
+    CHECK(ctt::MeetsOrExceedsPreferredResolution(1920, 1080, 1440, 1080, false));
+    CHECK(!ctt::MeetsOrExceedsPreferredResolution(1280, 720, 1920, 1080, false));
+    CHECK(ctt::MeetsOrExceedsPreferredResolution(1080, 1920, 1920, 1080, true));
+    CHECK(!ctt::MeetsOrExceedsPreferredResolution(900, 1600, 1920, 1080, true));
 
     using ctt::CalibrationStage;
     using ctt::ClearTypeProfile;
