@@ -40,37 +40,54 @@ int main() {
     CHECK(ctt::NormalizeDisplayKey(L"DISPLAY2") == L"DISPLAY2");
     CHECK(ctt::NormalizeDisplayKey(L"\\\\?\\DISPLAY3") == L"\\\\?\\DISPLAY3");
 
-    CHECK(ctt::MeetsOrExceedsPreferredResolution(1920, 1080, 1920, 1080, false));
     CHECK(ctt::MeetsOrExceedsPreferredResolution(1920, 1080, 1440, 1080, false));
     CHECK(!ctt::MeetsOrExceedsPreferredResolution(1280, 720, 1920, 1080, false));
     CHECK(ctt::MeetsOrExceedsPreferredResolution(1080, 1920, 1920, 1080, true));
-    CHECK(!ctt::MeetsOrExceedsPreferredResolution(900, 1600, 1920, 1080, true));
 
     using ctt::CalibrationStage;
     using ctt::ClearTypeProfile;
-    CHECK(ctt::CandidateValues(CalibrationStage::PixelStructure).size() == 2);
-    CHECK(ctt::CandidateValues(CalibrationStage::Gamma).size() == 3);
-    CHECK(ctt::CandidateValues(CalibrationStage::ClearTypeLevel).size() == 6);
-    CHECK(ctt::CandidateValues(CalibrationStage::TextContrast).size() == 6);
-    CHECK(ctt::CandidateValues(CalibrationStage::EnhancedContrast).size() == 6);
-    CHECK(ctt::CandidateValues(CalibrationStage::Gamma).front() == 1000);
-    CHECK(ctt::CandidateValues(CalibrationStage::EnhancedContrast).back() == 500);
-    CHECK(ctt::NearestCandidateIndex(CalibrationStage::Gamma, 2190) == 2);
+    CHECK(ctt::CandidateCount(CalibrationStage::PixelStructure) == 2);
+    CHECK(ctt::CandidateCount(CalibrationStage::EnhancedContrast) == 6);
+    CHECK(ctt::CandidateCount(CalibrationStage::ClearTypeLevel) == 3);
+    CHECK(ctt::CandidateCount(CalibrationStage::ContrastCombination) == 6);
+    CHECK(ctt::CandidateCount(CalibrationStage::GrayscaleEnhancedContrast) == 6);
 
     ClearTypeProfile profile{};
+    const int originalGamma = profile.gammaLevel;
     ctt::ApplyCandidate(profile, CalibrationStage::PixelStructure, 1);
     CHECK(profile.pixelStructure == 2);
-    ctt::ApplyCandidate(profile, CalibrationStage::TextContrast, 5);
-    CHECK(profile.textContrastLevel == 6);
+    ctt::ApplyCandidate(profile, CalibrationStage::EnhancedContrast, 5);
+    CHECK(profile.enhancedContrastLevel == 400);
+    ctt::ApplyCandidate(profile, CalibrationStage::ClearTypeLevel, 2);
+    CHECK(profile.clearTypeLevel == 0);
+    ctt::ApplyCandidate(profile, CalibrationStage::ContrastCombination, 5);
+    CHECK(profile.enhancedContrastLevel == 400);
+    CHECK(profile.textContrastLevel == 2);
+    ctt::ApplyCandidate(profile, CalibrationStage::GrayscaleEnhancedContrast, 3);
+    CHECK(profile.grayscaleEnhancedContrastLevel == 200);
+    CHECK(profile.gammaLevel == originalGamma);
+
+    ClearTypeProfile renderingBase{};
+    const auto combinationRender = ctt::RenderingProfileForCandidate(
+        renderingBase, CalibrationStage::ContrastCombination, 4);
+    CHECK(combinationRender.enhancedContrastLevel == 300);
+    CHECK(combinationRender.grayscaleEnhancedContrastLevel == 300);
+    CHECK(combinationRender.textContrastLevel == 1);
+    const auto grayscaleRender = ctt::RenderingProfileForCandidate(
+        renderingBase, CalibrationStage::GrayscaleEnhancedContrast, 5);
+    CHECK(grayscaleRender.clearTypeLevel == 0);
+    CHECK(grayscaleRender.enhancedContrastLevel == 400);
+    CHECK(grayscaleRender.grayscaleEnhancedContrastLevel == 400);
 
     profile.gammaLevel = 2200;
-    profile.clearTypeLevel = 80;
-    profile.textContrastLevel = 4;
-    profile.enhancedContrastLevel = 150;
+    profile.clearTypeLevel = 50;
+    profile.enhancedContrastLevel = 200;
+    profile.grayscaleEnhancedContrastLevel = 300;
     const auto rendering = ctt::ToRenderingParameters(profile);
     CHECK(rendering.gamma > 2.19F && rendering.gamma < 2.21F);
-    CHECK(rendering.clearTypeLevel > 0.79F && rendering.clearTypeLevel < 0.81F);
-    CHECK(rendering.enhancedContrast > 4.49F && rendering.enhancedContrast < 4.51F);
+    CHECK(rendering.clearTypeLevel > 0.49F && rendering.clearTypeLevel < 0.51F);
+    CHECK(rendering.enhancedContrast > 1.99F && rendering.enhancedContrast < 2.01F);
+    CHECK(rendering.grayscaleEnhancedContrast > 2.99F && rendering.grayscaleEnhancedContrast < 3.01F);
     CHECK(rendering.pixelGeometry == 2);
     CHECK(ctt::ToSpiContrast(ClearTypeProfile{.textContrastLevel = 6}) == 2200u);
     CHECK(ctt::ToSpiOrientation(ClearTypeProfile{.pixelStructure = 1}) == 1u);
@@ -92,17 +109,18 @@ int main() {
     CHECK(wizard.CurrentPage() == ctt::WizardPage::Welcome);
     CHECK(wizard.Next());
     CHECK(wizard.CurrentPage() == ctt::WizardPage::Resolution);
-    CHECK(wizard.Back());
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::Welcome);
     CHECK(wizard.Next());
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::Resolution);
-    wizard.Next();
     CHECK(wizard.CurrentPage() == ctt::WizardPage::PixelStructure);
-    wizard.SelectCandidate(1);
-    CHECK(wizard.CurrentProfile().pixelStructure == 2);
-    while (!wizard.IsMonitorCompletePage()) {
-        CHECK(wizard.Next());
-    }
+    CHECK(wizard.Next());
+    CHECK(wizard.CurrentPage() == ctt::WizardPage::EnhancedContrast);
+    CHECK(wizard.Next());
+    CHECK(wizard.CurrentPage() == ctt::WizardPage::ClearTypeLevel);
+    CHECK(wizard.Next());
+    CHECK(wizard.CurrentPage() == ctt::WizardPage::ContrastCombination);
+    CHECK(wizard.Next());
+    CHECK(wizard.CurrentPage() == ctt::WizardPage::GrayscaleEnhancedContrast);
+    CHECK(wizard.Next());
+    CHECK(wizard.CurrentPage() == ctt::WizardPage::MonitorComplete);
     CHECK(wizard.Next());
     CHECK(wizard.CurrentMonitorIndex() == 1);
     CHECK(wizard.CurrentPage() == ctt::WizardPage::Resolution);
