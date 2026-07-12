@@ -4,7 +4,9 @@
 #include "win32/Win32Error.h"
 
 #include <algorithm>
-#include <dxgiformat.h>
+#include <atomic>
+#include <cmath>
+#include <new>
 
 namespace ctt::win32 {
 namespace {
@@ -20,31 +22,172 @@ DWRITE_PIXEL_GEOMETRY PixelGeometry(const int value) noexcept {
     }
 }
 
+class BitmapTextRenderer final : public IDWriteTextRenderer {
+public:
+    BitmapTextRenderer(
+        IDWriteBitmapRenderTarget* target,
+        IDWriteRenderingParams* renderingParameters,
+        const COLORREF textColor) noexcept
+        : target_(target), renderingParameters_(renderingParameters), textColor_(textColor) {}
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID interfaceId, void** object) override {
+        if (object == nullptr) {
+            return E_POINTER;
+        }
+        *object = nullptr;
+        if (IsEqualIID(interfaceId, __uuidof(IUnknown)) ||
+            IsEqualIID(interfaceId, __uuidof(IDWritePixelSnapping)) ||
+            IsEqualIID(interfaceId, __uuidof(IDWriteTextRenderer))) {
+            *object = static_cast<IDWriteTextRenderer*>(this);
+            AddRef();
+            return S_OK;
+        }
+        return E_NOINTERFACE;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() override {
+        return ++referenceCount_;
+    }
+
+    ULONG STDMETHODCALLTYPE Release() override {
+        const ULONG count = --referenceCount_;
+        if (count == 0) {
+            delete this;
+        }
+        return count;
+    }
+
+    HRESULT STDMETHODCALLTYPE IsPixelSnappingDisabled(void*, BOOL* disabled) override {
+        if (disabled == nullptr) {
+            return E_POINTER;
+        }
+        *disabled = FALSE;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetCurrentTransform(void*, DWRITE_MATRIX* transform) override {
+        if (transform == nullptr) {
+            return E_POINTER;
+        }
+        return target_->GetCurrentTransform(transform);
+    }
+
+    HRESULT STDMETHODCALLTYPE GetPixelsPerDip(void*, FLOAT* pixelsPerDip) override {
+        if (pixelsPerDip == nullptr) {
+            return E_POINTER;
+        }
+        *pixelsPerDip = target_->GetPixelsPerDip();
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE DrawGlyphRun(
+        void*,
+        const FLOAT baselineOriginX,
+        const FLOAT baselineOriginY,
+        const DWRITE_MEASURING_MODE measuringMode,
+        const DWRITE_GLYPH_RUN* glyphRun,
+        const DWRITE_GLYPH_RUN_DESCRIPTION*,
+        IUnknown*) override {
+        return target_->DrawGlyphRun(
+            baselineOriginX,
+            baselineOriginY,
+            measuringMode,
+            glyphRun,
+            renderingParameters_.Get(),
+            textColor_,
+            nullptr);
+    }
+
+    HRESULT STDMETHODCALLTYPE DrawUnderline(
+        void*, FLOAT, FLOAT, const DWRITE_UNDERLINE*, IUnknown*) override {
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE DrawStrikethrough(
+        void*, FLOAT, FLOAT, const DWRITE_STRIKETHROUGH*, IUnknown*) override {
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE DrawInlineObject(
+        void* clientDrawingContext,
+        const FLOAT originX,
+        const FLOAT originY,
+        IDWriteInlineObject* inlineObject,
+        const BOOL isSideways,
+        const BOOL isRightToLeft,
+        IUnknown* drawingEffect) override {
+        if (inlineObject == nullptr) {
+            return E_INVALIDARG;
+        }
+        return inlineObject->Draw(
+            clientDrawingContext,
+            this,
+            originX,
+            originY,
+            isSideways,
+            isRightToLeft,
+            drawingEffect);
+    }
+
+private:
+    std::atomic<ULONG> referenceCount_{1};
+    Microsoft::WRL::ComPtr<IDWriteBitmapRenderTarget> target_;
+    Microsoft::WRL::ComPtr<IDWriteRenderingParams> renderingParameters_;
+    COLORREF textColor_{};
+};
+
+void DrawCardBorder(
+    HDC deviceContext,
+    const RECT& bounds,
+    const bool selected,
+    const bool focused,
+    const COLORREF borderColor) noexcept {
+    const int thickness = selected ? 3 : 1;
+    HPEN borderPen = CreatePen(PS_SOLID, thickness, borderColor);
+    if (borderPen != nullptr) {
+        const HGDIOBJ previousPen = SelectObject(deviceContext, borderPen);
+        const HGDIOBJ previousBrush = SelectObject(deviceContext, GetStockObject(NULL_BRUSH));
+        Rectangle(deviceContext, bounds.left, bounds.top, bounds.right, bounds.bottom);
+        SelectObject(deviceContext, previousBrush);
+        SelectObject(deviceContext, previousPen);
+        DeleteObject(borderPen);
+    }
+
+    if (focused) {
+        RECT focusRect = bounds;
+        InflateRect(&focusRect, -5, -5);
+        DrawFocusRect(deviceContext, &focusRect);
+    }
+}
+
 }  // namespace
 
 bool SampleRenderer::Initialize(std::wstring& error) {
-    HRESULT result = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, d2dFactory_.ReleaseAndGetAddressOf());
-    if (FAILED(result)) {
-        error = MakeWindowsError(L"Unable to initialize Direct2D", static_cast<unsigned long>(result));
-        return false;
-    }
-
-    result = DWriteCreateFactory(
+    HRESULT result = DWriteCreateFactory(
         DWRITE_FACTORY_TYPE_SHARED,
-        __uuidof(IDWriteFactory),
+        __uuidof(IDWriteFactory1),
         reinterpret_cast<IUnknown**>(writeFactory_.ReleaseAndGetAddressOf()));
     if (FAILED(result)) {
-        error = MakeWindowsError(L"Unable to initialize DirectWrite", static_cast<unsigned long>(result));
+        error = MakeWindowsError(L"Unable to initialize DirectWrite 1", static_cast<unsigned long>(result));
         return false;
     }
 
+    result = writeFactory_->GetGdiInterop(gdiInterop_.ReleaseAndGetAddressOf());
+    if (FAILED(result)) {
+        error = MakeWindowsError(L"Unable to initialize DirectWrite GDI interop", static_cast<unsigned long>(result));
+        return false;
+    }
+
+    // Modern cttune.exe uses Calibri at 11 points. DirectWrite font sizes are
+    // device-independent pixels, so 11 pt is 14.666... DIPs.
+    constexpr FLOAT kSampleFontSize = 11.0F * 96.0F / 72.0F;
     result = writeFactory_->CreateTextFormat(
-        L"Segoe UI",
+        L"Calibri",
         nullptr,
         DWRITE_FONT_WEIGHT_NORMAL,
         DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL,
-        12.0F,
+        kSampleFontSize,
         L"en-us",
         textFormat_.ReleaseAndGetAddressOf());
     if (FAILED(result)) {
@@ -57,141 +200,140 @@ bool SampleRenderer::Initialize(std::wstring& error) {
     return true;
 }
 
-bool SampleRenderer::EnsureDeviceResources(std::wstring& error) {
-    if (renderTarget_ != nullptr) {
-        return true;
-    }
-
-    const D2D1_RENDER_TARGET_PROPERTIES properties = D2D1::RenderTargetProperties(
-        D2D1_RENDER_TARGET_TYPE_DEFAULT,
-        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE),
-        0.0F,
-        0.0F,
-        D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE,
-        D2D1_FEATURE_LEVEL_DEFAULT);
-
-    HRESULT result = d2dFactory_->CreateDCRenderTarget(&properties, renderTarget_.ReleaseAndGetAddressOf());
-    if (FAILED(result)) {
-        error = MakeWindowsError(L"Unable to create the sample render target", static_cast<unsigned long>(result));
-        return false;
-    }
-
-    result = renderTarget_->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), textBrush_.ReleaseAndGetAddressOf());
-    if (FAILED(result)) {
-        error = MakeWindowsError(L"Unable to create the sample text brush", static_cast<unsigned long>(result));
-        DiscardDeviceResources();
-        return false;
-    }
-    result = renderTarget_->CreateSolidColorBrush(D2D1::ColorF(0x0078D4), borderBrush_.ReleaseAndGetAddressOf());
-    if (FAILED(result)) {
-        error = MakeWindowsError(L"Unable to create the sample border brush", static_cast<unsigned long>(result));
-        DiscardDeviceResources();
-        return false;
-    }
-    return true;
-}
-
 void SampleRenderer::DiscardDeviceResources() noexcept {
-    borderBrush_.Reset();
-    textBrush_.Reset();
-    renderTarget_.Reset();
+    // Bitmap render targets are deliberately short-lived and recreated for the
+    // destination HDC, matching the stock tuner's GDI-compatible path.
 }
 
 bool SampleRenderer::DrawSample(
     HDC deviceContext,
     const RECT& bounds,
     const ClearTypeProfile& profile,
+    const CalibrationStage stage,
     const unsigned int dpi,
     const bool dark,
     const bool selected,
     const bool focused,
     const std::wstring_view text,
     std::wstring& error) {
-    if (deviceContext == nullptr || bounds.right <= bounds.left || bounds.bottom <= bounds.top) {
+    const LONG widthPixels = bounds.right - bounds.left;
+    const LONG heightPixels = bounds.bottom - bounds.top;
+    if (deviceContext == nullptr || widthPixels <= 0 || heightPixels <= 0) {
         error = L"The sample drawing surface is invalid.";
         return false;
     }
-    if (!EnsureDeviceResources(error)) {
+
+    Microsoft::WRL::ComPtr<IDWriteBitmapRenderTarget> baseTarget;
+    HRESULT result = gdiInterop_->CreateBitmapRenderTarget(
+        deviceContext,
+        static_cast<UINT32>(widthPixels),
+        static_cast<UINT32>(heightPixels),
+        baseTarget.ReleaseAndGetAddressOf());
+    if (FAILED(result)) {
+        error = MakeWindowsError(L"Unable to create the sample bitmap target", static_cast<unsigned long>(result));
         return false;
     }
 
-    const HRESULT bindResult = renderTarget_->BindDC(deviceContext, &bounds);
-    if (FAILED(bindResult)) {
-        error = MakeWindowsError(L"Unable to bind the sample drawing surface", static_cast<unsigned long>(bindResult));
+    Microsoft::WRL::ComPtr<IDWriteBitmapRenderTarget1> target;
+    result = baseTarget.As(&target);
+    if (FAILED(result)) {
+        error = MakeWindowsError(L"DirectWrite bitmap target 1 is unavailable", static_cast<unsigned long>(result));
+        return false;
+    }
+
+    const FLOAT pixelsPerDip = static_cast<FLOAT>(std::max(dpi, 96U)) / 96.0F;
+    result = target->SetPixelsPerDip(pixelsPerDip);
+    if (FAILED(result)) {
+        error = MakeWindowsError(L"Unable to set the sample DPI", static_cast<unsigned long>(result));
+        return false;
+    }
+    const DWRITE_MATRIX identity{1.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F};
+    target->SetCurrentTransform(&identity);
+
+    const bool grayscaleStage = stage == CalibrationStage::GrayscaleEnhancedContrast;
+    result = target->SetTextAntialiasMode(
+        grayscaleStage ? DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE : DWRITE_TEXT_ANTIALIAS_MODE_CLEARTYPE);
+    if (FAILED(result)) {
+        error = MakeWindowsError(L"Unable to set the sample antialiasing mode", static_cast<unsigned long>(result));
         return false;
     }
 
     const auto parameters = ToRenderingParameters(profile);
-    Microsoft::WRL::ComPtr<IDWriteRenderingParams> renderingParams;
-    const HRESULT parameterResult = writeFactory_->CreateCustomRenderingParams(
+    Microsoft::WRL::ComPtr<IDWriteRenderingParams1> renderingParameters;
+    result = writeFactory_->CreateCustomRenderingParams(
         std::clamp(parameters.gamma, 1.0F, 2.2F),
         std::clamp(parameters.enhancedContrast, 0.0F, 10.0F),
+        std::clamp(parameters.grayscaleEnhancedContrast, 0.0F, 10.0F),
         std::clamp(parameters.clearTypeLevel, 0.0F, 1.0F),
         PixelGeometry(parameters.pixelGeometry),
-        DWRITE_RENDERING_MODE_GDI_CLASSIC,
-        renderingParams.ReleaseAndGetAddressOf());
-    if (FAILED(parameterResult)) {
-        error = MakeWindowsError(L"Unable to create sample rendering parameters", static_cast<unsigned long>(parameterResult));
+        DWRITE_RENDERING_MODE_DEFAULT,
+        renderingParameters.ReleaseAndGetAddressOf());
+    if (FAILED(result)) {
+        error = MakeWindowsError(L"Unable to create sample rendering parameters", static_cast<unsigned long>(result));
         return false;
     }
 
-    const float effectiveDpi = static_cast<float>(std::max(dpi, 96U));
-    renderTarget_->SetDpi(effectiveDpi, effectiveDpi);
-    const float pixelToDip = 96.0F / effectiveDpi;
-    const float width = static_cast<float>(bounds.right - bounds.left) * pixelToDip;
-    const float height = static_cast<float>(bounds.bottom - bounds.top) * pixelToDip;
-    const D2D1_COLOR_F background = dark ? D2D1::ColorF(0x202020) : D2D1::ColorF(0xFAFAFA);
-    const D2D1_COLOR_F foreground = dark ? D2D1::ColorF(0xF2F2F2) : D2D1::ColorF(0x151515);
-    const D2D1_COLOR_F border = selected ? D2D1::ColorF(0x0078D4) : (dark ? D2D1::ColorF(0x5A5A5A) : D2D1::ColorF(0xB5B5B5));
+    const COLORREF background = dark ? RGB(32, 32, 32) : RGB(250, 250, 250);
+    const COLORREF foreground = dark ? RGB(242, 242, 242) : RGB(21, 21, 21);
+    const COLORREF border = selected
+        ? RGB(0, 120, 212)
+        : (dark ? RGB(90, 90, 90) : RGB(181, 181, 181));
 
-    textBrush_->SetColor(foreground);
-    borderBrush_->SetColor(border);
-    renderTarget_->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
-    renderTarget_->SetTextRenderingParams(renderingParams.Get());
-    renderTarget_->BeginDraw();
-    renderTarget_->SetTransform(D2D1::Matrix3x2F::Identity());
-    renderTarget_->Clear(background);
+    HDC memoryDc = target->GetMemoryDC();
+    RECT memoryBounds{0, 0, widthPixels, heightPixels};
+    HBRUSH backgroundBrush = CreateSolidBrush(background);
+    if (backgroundBrush == nullptr) {
+        error = MakeWindowsError(L"Unable to create the sample background brush", GetLastError());
+        return false;
+    }
+    FillRect(memoryDc, &memoryBounds, backgroundBrush);
+    DeleteObject(backgroundBrush);
 
-    const D2D1_RECT_F textBounds = D2D1::RectF(12.0F, 8.0F, std::max(13.0F, width - 12.0F), std::max(9.0F, height - 8.0F));
-    renderTarget_->DrawTextW(
+    const FLOAT widthDips = static_cast<FLOAT>(widthPixels) / pixelsPerDip;
+    const FLOAT heightDips = static_cast<FLOAT>(heightPixels) / pixelsPerDip;
+    constexpr FLOAT kHorizontalPadding = 12.0F;
+    constexpr FLOAT kVerticalPadding = 8.0F;
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> layout;
+    result = writeFactory_->CreateTextLayout(
         text.data(),
         static_cast<UINT32>(text.size()),
         textFormat_.Get(),
-        textBounds,
-        textBrush_.Get(),
-        D2D1_DRAW_TEXT_OPTIONS_CLIP,
-        DWRITE_MEASURING_MODE_GDI_CLASSIC);
-
-    const float borderInset = selected ? 1.5F : 0.5F;
-    renderTarget_->DrawRectangle(
-        D2D1::RectF(borderInset, borderInset, width - borderInset, height - borderInset),
-        borderBrush_.Get(),
-        selected ? 3.0F : 1.0F);
-    if (focused) {
-        Microsoft::WRL::ComPtr<ID2D1StrokeStyle> dashed;
-        const D2D1_STROKE_STYLE_PROPERTIES strokeProperties = D2D1::StrokeStyleProperties(
-            D2D1_CAP_STYLE_FLAT,
-            D2D1_CAP_STYLE_FLAT,
-            D2D1_CAP_STYLE_FLAT,
-            D2D1_LINE_JOIN_MITER,
-            10.0F,
-            D2D1_DASH_STYLE_DASH,
-            0.0F);
-        if (SUCCEEDED(d2dFactory_->CreateStrokeStyle(&strokeProperties, nullptr, 0, dashed.ReleaseAndGetAddressOf()))) {
-            renderTarget_->DrawRectangle(D2D1::RectF(5.0F, 5.0F, width - 5.0F, height - 5.0F), borderBrush_.Get(), 1.0F, dashed.Get());
-        }
-    }
-
-    const HRESULT drawResult = renderTarget_->EndDraw();
-    if (drawResult == D2DERR_RECREATE_TARGET) {
-        DiscardDeviceResources();
-        error = L"The sample rendering device was reset.";
+        std::max(1.0F, widthDips - kHorizontalPadding * 2.0F),
+        std::max(1.0F, heightDips - kVerticalPadding * 2.0F),
+        layout.ReleaseAndGetAddressOf());
+    if (FAILED(result)) {
+        error = MakeWindowsError(L"Unable to create the sample text layout", static_cast<unsigned long>(result));
         return false;
     }
-    if (FAILED(drawResult)) {
-        error = MakeWindowsError(L"Unable to draw the sample", static_cast<unsigned long>(drawResult));
+
+    auto* textRenderer = new (std::nothrow) BitmapTextRenderer(
+        target.Get(), renderingParameters.Get(), foreground);
+    if (textRenderer == nullptr) {
+        error = L"Unable to allocate the sample text renderer.";
         return false;
     }
+    result = layout->Draw(nullptr, textRenderer, kHorizontalPadding, kVerticalPadding);
+    textRenderer->Release();
+    if (FAILED(result)) {
+        error = MakeWindowsError(L"Unable to draw the sample text", static_cast<unsigned long>(result));
+        return false;
+    }
+
+    if (BitBlt(
+            deviceContext,
+            bounds.left,
+            bounds.top,
+            widthPixels,
+            heightPixels,
+            memoryDc,
+            0,
+            0,
+            SRCCOPY) == FALSE) {
+        error = MakeWindowsError(L"Unable to copy the rendered sample", GetLastError());
+        return false;
+    }
+
+    DrawCardBorder(deviceContext, bounds, selected, focused, border);
     return true;
 }
 
