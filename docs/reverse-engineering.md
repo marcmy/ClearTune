@@ -15,13 +15,18 @@ Analyzed file fingerprints:
 
 ## Confirmed observations
 
-- Both executable variants are native Win32 PE files.
-- The stock application imports GDI text and bitmap APIs including `CreateFontIndirectW`, `SetTextColor`, `SetBkColor`, and `DrawTextW`.
-- It calls `SystemParametersInfoW` for:
+- Both executable variants are native Win32 PE files and expose equivalent high-level behavior.
+- Calibration text is generated at runtime rather than embedded as sample bitmaps.
+- The `.mun` contains decorative resources, not the calibration text itself.
+- The modern sample renderer uses DirectWrite GDI interop, `IDWriteBitmapRenderTarget1`, and `IDWriteFactory1::CreateCustomRenderingParams`.
+- Modern stock samples use Calibri at 11 points, with a Verdana fallback path.
+- The final calibration page explicitly switches its bitmap target to grayscale antialiasing.
+- The application calls `SystemParametersInfoW` for:
   - font smoothing enabled state;
   - smoothing type;
   - smoothing contrast;
   - RGB/BGR orientation.
+- Those global settings are applied without persistence while moving through the wizard, followed by a desktop redraw. Cancel restores the captured values; Finish persists them.
 - Per-display values are stored beneath:
 
   ```text
@@ -35,14 +40,35 @@ Analyzed file fingerprints:
   - `TextContrastLevel`
   - `EnhancedContrastLevel`
   - `GrayscaleEnhancedContrastLevel`
-- The localized wizard resources describe five sample stages with candidate counts **2, 3, 6, 6, 6**.
-- Calibration text is generated at runtime rather than embedded as a set of sample bitmaps.
-- The `.mun` contains decorative resources, not the calibration text itself.
-- The 32-bit and 64-bit variants expose equivalent high-level behavior.
+
+## Recovered stock page sequence
+
+The five calibration pages are not gamma, ClearType level, text contrast, and enhanced contrast as initially assumed. Their observable order and candidate counts are:
+
+| Page | Parameter | Choices |
+|---:|---|---:|
+| 1 | Pixel structure | 2 |
+| 2 | Enhanced contrast | 6 |
+| 3 | ClearType level | 3 |
+| 4 | Enhanced/text contrast combination | 6 |
+| 5 | Grayscale enhanced contrast | 6 |
+
+Gamma is retained as part of the per-monitor profile but is not presented as a user-selectable page in this build of the stock tuner.
+
+## Recovered candidate tables
+
+The values below are the observable integer parameters passed into the stock rendering pipeline and persisted in the corresponding profile fields:
+
+- Pixel structure: `1, 2`
+- Enhanced contrast: `0, 50, 100, 200, 300, 400`
+- ClearType level: `100, 50, 0`
+- Page-4 enhanced contrast: `0, 50, 100, 200, 300, 400`
+- Page-4 text contrast: `0, 0, 1, 1, 1, 2`
+- Grayscale enhanced contrast: `0, 50, 100, 200, 300, 400`
+
+Before being passed to DirectWrite, gamma is divided by `1000`, both enhanced-contrast channels are divided by `100`, and ClearType level is divided by `100`.
 
 ## Public SPI mapping
-
-The implementation uses the documented `SystemParametersInfoW` actions corresponding to the behavior observed in the binary:
 
 | Purpose | Get | Set |
 |---|---:|---:|
@@ -51,22 +77,14 @@ The implementation uses the documented `SystemParametersInfoW` actions correspon
 | Contrast | `SPI_GETFONTSMOOTHINGCONTRAST` | `SPI_SETFONTSMOOTHINGCONTRAST` |
 | RGB/BGR orientation | `SPI_GETFONTSMOOTHINGORIENTATION` | `SPI_SETFONTSMOOTHINGORIENTATION` |
 
-## Values inferred rather than copied
+ClearTune uses flag `0` for reversible in-session preview and `SPIF_UPDATEINIFILE | SPIF_SENDCHANGE` only for the final committed state.
 
-The exact private candidate arrays used by the Microsoft wizard were not recovered with enough confidence to claim a byte-for-byte match. Version 0.1 intentionally uses conservative ranges that are valid for DirectWrite custom rendering parameters:
+## Rendering approach
 
-- Pixel structure: `RGB`, `BGR`
-- Gamma: `1.4`, `1.8`, `2.2`
-- ClearType level: `0`, `20`, `40`, `60`, `80`, `100`
-- Text contrast level: `0`, `1`, `2`, `3`, `4`, `6`
-- Enhanced contrast: `0`, `0.5`, `1.0`, `1.5`, `2.0`, `3.0`
+Each card must render with independent parameters, so ClearTune follows the stock GDI-compatible DirectWrite path rather than changing the machine-wide settings once per card. It creates a bitmap render target, applies custom rendering parameters, lays out the sample text through DirectWrite, then copies the resulting bitmap into the native owner-drawn button.
 
-These preserve the stock candidate counts and produce meaningfully different samples without mutating live settings during the wizard.
-
-## Why DirectWrite is used for the clone
-
-The stock tool's GDI pipeline can evaluate one live system configuration at a time. This project needs multiple candidate cards on the same page, each with independent rendering parameters, while guaranteeing zero system mutation before Finish. DirectWrite's custom rendering parameters provide that isolation cleanly. The shell remains native Win32 and the final settings are written in Windows-compatible formats.
+The selected profile is also applied to the compatible global SPI settings when advancing through the wizard. This reproduces the stock tool's page-to-page live-preview behavior while preserving independent candidate cards.
 
 ## Empirical follow-up
 
-`tools/Snapshot-ClearType.ps1` captures global SPI and per-display Avalon values. A future compatibility pass can run that tool before and after controlled stock-tuner selection paths, compare snapshots, and refine candidate mappings without changing the application architecture.
+`tools/Snapshot-ClearType.ps1` captures global SPI and per-display Avalon values. It remains useful for comparing stock and ClearTune behavior across Windows builds, graphics drivers, display overrides, and unusual monitor configurations.
