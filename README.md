@@ -11,16 +11,18 @@ Windows' built-in ClearType tuner presents dark text on a light background. Clea
 ## What it does
 
 - Native C++20 and Win32; no .NET or third-party runtime.
-- Stock-shaped wizard with five sample pages: 2, 3, 6, 6, and 6 choices.
+- Uses the recovered stock five-stage sequence with **2, 6, 3, 6, and 6** choices.
 - Three-state **System / Light / Dark** selector.
 - `System` follows the Windows app theme. A manual Light or Dark choice is remembered until changed.
 - Light mode renders dark text on a near-white surface.
 - Dark mode renders light text on the standard near-black Windows app surface.
 - Tunes all active monitors or one selected monitor.
-- Skips the display-setup page when a landscape monitor is already using its preferred resolution.
-- Shows a warning only for portrait orientation or a known non-native resolution.
-- Uses smaller, stock-like sample text and GDI-classic DirectWrite rendering so differences are easier to judge.
-- Keeps every choice in memory until **Finish**.
+- Skips the display-setup page when a landscape monitor is already using an acceptable resolution.
+- Shows a warning only for portrait orientation or a known reduced resolution.
+- Uses the stock-style DirectWrite bitmap-render-target path and Calibri 11-point samples.
+- Previews the selected global ClearType settings as you advance through the wizard.
+- Restores the original global settings when you cancel or return to the opening page.
+- Persists per-monitor and global settings only when you click **Finish**.
 - Captures global and per-display ClearType values before the session.
 - Rolls the complete snapshot back if applying any value fails.
 - Requires no administrator rights, service, tray process, startup entry, telemetry, or updater.
@@ -35,7 +37,7 @@ The app reads and writes the same user-scoped settings used by Windows font rend
 HKCU\Software\Microsoft\Avalon.Graphics\DISPLAY…
 ```
 
-It also applies the compatible global font-smoothing values through `SystemParametersInfoW`. Nothing is written before **Finish**. Cancel simply exits. A failed apply automatically restores the launch snapshot.
+During calibration, ClearTune temporarily previews the compatible global font-smoothing values through `SystemParametersInfoW`, using non-persistent calls. Cancel and Back-to-start restore the launch snapshot. Per-monitor registry values and persistent global settings are written only when **Finish** is clicked. A failed final apply automatically restores the launch snapshot.
 
 For an independent before/after record, run:
 
@@ -80,11 +82,11 @@ ctest --test-dir build --output-on-failure
 
 ## Current compatibility status
 
-Static analysis of the supplied Windows 11 ClearType tuner established the compatible registry value names, global SPI operations, runtime-generated sample text, and stock page choice counts. The exact private candidate arrays were not copied or recovered. Version 0.1 therefore uses original, DirectWrite-compatible candidate ranges while preserving the stock-shaped flow. See [`docs/reverse-engineering.md`](docs/reverse-engineering.md).
+Static analysis of the supplied Windows 11 ClearType tuner established the stock page order, candidate tables, DirectWrite rendering path, live-preview behavior, compatible registry values, and global SPI operations. ClearTune reproduces those observable behaviors through public Windows interfaces while adding theme polarity and a refreshed native UI. See [`docs/reverse-engineering.md`](docs/reverse-engineering.md).
 
 ## Clean-room boundary
 
-This repository contains no Microsoft executables, resources, artwork, or source code. The implementation uses public Win32, Direct2D, DirectWrite, registry, display-configuration, and system-parameter interfaces. The supplied Windows binaries were inspected only to understand observable compatibility behavior and data formats.
+This repository contains no Microsoft executables, resources, artwork, or source code. The implementation uses public Win32, DirectWrite, registry, display-configuration, and system-parameter interfaces. The supplied Windows binaries were inspected only to understand observable compatibility behavior and data formats.
 
 ## License
 
