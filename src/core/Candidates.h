@@ -3,21 +3,23 @@
 #include "core/Profile.h"
 
 #include <cstddef>
-#include <span>
 
 namespace ctt {
 
 enum class CalibrationStage {
     PixelStructure,
-    Gamma,
-    ClearTypeLevel,
-    TextContrast,
     EnhancedContrast,
+    ClearTypeLevel,
+    ContrastCombination,
+    GrayscaleEnhancedContrast,
 };
 
-[[nodiscard]] std::span<const int> CandidateValues(CalibrationStage stage) noexcept;
-[[nodiscard]] std::size_t NearestCandidateIndex(CalibrationStage stage, int value) noexcept;
+[[nodiscard]] std::size_t CandidateCount(CalibrationStage stage) noexcept;
+[[nodiscard]] std::size_t NearestCandidateIndex(CalibrationStage stage, const ClearTypeProfile& profile) noexcept;
 void ApplyCandidate(ClearTypeProfile& profile, CalibrationStage stage, std::size_t index) noexcept;
-[[nodiscard]] int ValueForStage(const ClearTypeProfile& profile, CalibrationStage stage) noexcept;
+[[nodiscard]] ClearTypeProfile RenderingProfileForCandidate(
+    const ClearTypeProfile& profile,
+    CalibrationStage stage,
+    std::size_t index) noexcept;
 
 }  // namespace ctt
