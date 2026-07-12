@@ -25,6 +25,9 @@ if(WIN32)
         src/win32/App.cpp
         src/win32/ClearTypeSettings.cpp
         src/win32/MainWindow.cpp
+        src/win32/MainWindowControls.cpp
+        src/win32/MainWindowNavigation.cpp
+        src/win32/MainWindowView.cpp
         src/win32/MonitorService.cpp
         src/win32/Preferences.cpp
         src/win32/SampleRenderer.cpp
@@ -45,7 +48,6 @@ if(WIN32)
         cleartune_core
         advapi32
         comctl32
-        d2d1
         dwrite
         dwmapi
         gdi32
@@ -55,8 +57,6 @@ if(WIN32)
     )
     if(MSVC)
         target_compile_options(ClearTune PRIVATE /W4 /permissive- /EHsc /utf-8)
-        # app.rc embeds our custom DPI/compatibility manifest. Disable MSVC's
-        # automatically generated manifest to avoid a duplicate RT_MANIFEST/1.
         target_link_options(ClearTune PRIVATE /MANIFEST:NO)
     endif()
     set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT ClearTune)
