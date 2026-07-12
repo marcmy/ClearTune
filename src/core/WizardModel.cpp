@@ -95,9 +95,6 @@ bool WizardModel::Next() noexcept {
     finishedFromWelcome_ = false;
     switch (page_) {
         case WizardPage::Welcome:
-            page_ = WizardPage::MonitorSelection;
-            return true;
-        case WizardPage::MonitorSelection:
             page_ = WizardPage::Resolution;
             return true;
         case WizardPage::Resolution:
@@ -132,12 +129,9 @@ bool WizardModel::Back() noexcept {
     switch (page_) {
         case WizardPage::Welcome:
             return false;
-        case WizardPage::MonitorSelection:
-            page_ = WizardPage::Welcome;
-            return true;
         case WizardPage::Resolution:
             if (currentMonitor_ == 0U) {
-                page_ = WizardPage::MonitorSelection;
+                page_ = WizardPage::Welcome;
             } else {
                 --currentMonitor_;
                 page_ = WizardPage::MonitorComplete;
