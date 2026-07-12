@@ -19,12 +19,17 @@ constexpr wchar_t kWindowClass[] = L"ClearTune.MainWindow";
 constexpr wchar_t kWindowTitle[] = L"ClearTune";
 constexpr int kThemeComboId = 100;
 constexpr int kClearTypeCheckId = 101;
+constexpr int kTuneAllRadioId = 102;
+constexpr int kTuneOneRadioId = 103;
+constexpr int kMonitorComboId = 104;
 constexpr int kBackButtonId = 200;
 constexpr int kNextButtonId = IDOK;
 constexpr int kCancelButtonId = IDCANCEL;
 constexpr int kSampleBaseId = 1000;
 constexpr wchar_t kSampleText[] =
-    L"The quick brown fox jumps over the lazy dog. Clear text should look even, calm, and easy to read.";
+    L"Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Mauris ornare odio vel risus. "
+    L"Maecenas elit metus, pellentesque quis, pretium.\n\n"
+    L"Clear text should look even, calm, and easy to read.";
 
 constexpr COLORREF LightBackground() noexcept { return RGB(249, 249, 249); }
 constexpr COLORREF LightText() noexcept { return RGB(24, 24, 24); }
@@ -76,7 +81,12 @@ MainWindow::MainWindow(
       settings_(settings),
       model_(settings.InitialProfiles()),
       themeMode_(themeMode),
-      clearTypeEnabled_(settings.InitialClearTypeEnabled()) {}
+      clearTypeEnabled_(settings.InitialClearTypeEnabled()) {
+    activeMonitorIndices_.reserve(monitors_.size());
+    for (std::size_t index = 0; index < monitors_.size(); ++index) {
+        activeMonitorIndices_.push_back(index);
+    }
+}
 
 MainWindow::~MainWindow() {
     if (backgroundBrush_ != nullptr) {
@@ -115,7 +125,7 @@ bool MainWindow::CreateAndShow(const int showCommand, std::wstring& error) {
     }
 
     const UINT initialDpi = GetDpiForSystem();
-    RECT desired{0, 0, MulDiv(760, static_cast<int>(initialDpi), 96), MulDiv(600, static_cast<int>(initialDpi), 96)};
+    RECT desired{0, 0, MulDiv(840, static_cast<int>(initialDpi), 96), MulDiv(620, static_cast<int>(initialDpi), 96)};
     AdjustWindowRectExForDpi(
         &desired,
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
@@ -206,6 +216,11 @@ LRESULT MainWindow::HandleMessage(const UINT message, const WPARAM wParam, const
             }
             if (identifier == kClearTypeCheckId && notification == BN_CLICKED) {
                 clearTypeEnabled_ = SendMessageW(clearTypeCheck_, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                UpdateWelcomeControls();
+                return 0;
+            }
+            if ((identifier == kTuneAllRadioId || identifier == kTuneOneRadioId) && notification == BN_CLICKED) {
+                MonitorSelectionChanged();
                 return 0;
             }
             if (identifier == kBackButtonId && notification == BN_CLICKED) {
@@ -282,10 +297,10 @@ LRESULT MainWindow::HandleMessage(const UINT message, const WPARAM wParam, const
 }
 
 bool MainWindow::CreateControls(std::wstring& error) {
-    const DWORD staticStyle = WS_CHILD | WS_VISIBLE;
-    title_ = CreateWindowExW(0, L"STATIC", L"", staticStyle, 0, 0, 0, 0, window_, nullptr, instance_, nullptr);
+    const DWORD staticStyle = WS_CHILD | WS_VISIBLE | SS_NOPREFIX;
+    title_ = CreateWindowExW(0, L"STATIC", L"", staticStyle | SS_LEFT, 0, 0, 0, 0, window_, nullptr, instance_, nullptr);
     instruction_ = CreateWindowExW(0, L"STATIC", L"", staticStyle | SS_LEFT, 0, 0, 0, 0, window_, nullptr, instance_, nullptr);
-    monitorLabel_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD | SS_LEFT, 0, 0, 0, 0, window_, nullptr, instance_, nullptr);
+    monitorLabel_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD | SS_LEFT | SS_NOPREFIX, 0, 0, 0, 0, window_, nullptr, instance_, nullptr);
     themeLabel_ = CreateWindowExW(0, L"STATIC", L"Theme:", staticStyle | SS_RIGHT, 0, 0, 0, 0, window_, nullptr, instance_, nullptr);
     themeCombo_ = CreateWindowExW(
         0,
@@ -311,6 +326,58 @@ bool MainWindow::CreateControls(std::wstring& error) {
         0,
         window_,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kClearTypeCheckId)),
+        instance_,
+        nullptr);
+    clearTypeDescription_ = CreateWindowExW(
+        0,
+        L"STATIC",
+        L"ClearType makes the text you see on the screen sharper, clearer and easier to read.",
+        WS_CHILD | SS_LEFT | SS_NOPREFIX,
+        0,
+        0,
+        0,
+        0,
+        window_,
+        nullptr,
+        instance_,
+        nullptr);
+    tuneAllRadio_ = CreateWindowExW(
+        0,
+        L"BUTTON",
+        L"Tune &all active monitors",
+        WS_CHILD | WS_TABSTOP | WS_GROUP | BS_AUTORADIOBUTTON,
+        0,
+        0,
+        0,
+        0,
+        window_,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kTuneAllRadioId)),
+        instance_,
+        nullptr);
+    tuneOneRadio_ = CreateWindowExW(
+        0,
+        L"BUTTON",
+        L"Tune &one monitor:",
+        WS_CHILD | WS_TABSTOP | BS_AUTORADIOBUTTON,
+        0,
+        0,
+        0,
+        0,
+        window_,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kTuneOneRadioId)),
+        instance_,
+        nullptr);
+    monitorCombo_ = CreateWindowExW(
+        0,
+        L"COMBOBOX",
+        L"",
+        WS_CHILD | WS_TABSTOP | CBS_DROPDOWNLIST,
+        0,
+        0,
+        0,
+        0,
+        window_,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kMonitorComboId)),
         instance_,
         nullptr);
     backButton_ = CreateWindowExW(
@@ -370,7 +437,9 @@ bool MainWindow::CreateControls(std::wstring& error) {
     }
 
     if (title_ == nullptr || instruction_ == nullptr || monitorLabel_ == nullptr || themeLabel_ == nullptr ||
-        themeCombo_ == nullptr || clearTypeCheck_ == nullptr || backButton_ == nullptr || nextButton_ == nullptr || cancelButton_ == nullptr ||
+        themeCombo_ == nullptr || clearTypeCheck_ == nullptr || clearTypeDescription_ == nullptr ||
+        tuneAllRadio_ == nullptr || tuneOneRadio_ == nullptr || monitorCombo_ == nullptr ||
+        backButton_ == nullptr || nextButton_ == nullptr || cancelButton_ == nullptr ||
         std::any_of(sampleButtons_.begin(), sampleButtons_.end(), [](HWND handle) { return handle == nullptr; })) {
         error = MakeWindowsError(L"Unable to create wizard controls", GetLastError());
         return false;
@@ -381,15 +450,26 @@ bool MainWindow::CreateControls(std::wstring& error) {
     SendMessageW(themeCombo_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Dark"));
     SendMessageW(themeCombo_, CB_SETCURSEL, static_cast<WPARAM>(ThemeModeToStoredValue(themeMode_)), 0);
     SendMessageW(clearTypeCheck_, BM_SETCHECK, clearTypeEnabled_ ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessageW(tuneAllRadio_, BM_SETCHECK, BST_CHECKED, 0);
+    SendMessageW(tuneOneRadio_, BM_SETCHECK, BST_UNCHECKED, 0);
+
+    for (std::size_t index = 0; index < monitors_.size(); ++index) {
+        const std::wstring label = MonitorChoiceLabel(index);
+        SendMessageW(monitorCombo_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label.c_str()));
+    }
+    if (!monitors_.empty()) {
+        SendMessageW(monitorCombo_, CB_SETCURSEL, 0, 0);
+    }
 
     CreateFonts();
+    UpdateWelcomeControls();
     return true;
 }
 
 void MainWindow::CreateFonts() {
     DestroyFonts();
     const int normalHeight = -MulDiv(9, static_cast<int>(dpi_), 72);
-    const int titleHeight = -MulDiv(18, static_cast<int>(dpi_), 72);
+    const int titleHeight = -MulDiv(16, static_cast<int>(dpi_), 72);
     normalFont_ = CreateFontW(
         normalHeight,
         0,
@@ -421,8 +501,9 @@ void MainWindow::CreateFonts() {
         DEFAULT_PITCH | FF_DONTCARE,
         L"Segoe UI");
 
-    const std::array<HWND, 12> controls{
-        instruction_, monitorLabel_, themeLabel_, themeCombo_, clearTypeCheck_, backButton_, nextButton_, cancelButton_,
+    const std::array<HWND, 16> controls{
+        instruction_, monitorLabel_, themeLabel_, themeCombo_, clearTypeCheck_, clearTypeDescription_,
+        tuneAllRadio_, tuneOneRadio_, monitorCombo_, backButton_, nextButton_, cancelButton_,
         sampleButtons_[0], sampleButtons_[1], sampleButtons_[2], sampleButtons_[3]};
     for (const HWND control : controls) {
         if (control != nullptr) {
@@ -479,12 +560,17 @@ void MainWindow::Layout() {
     const int buttonWidth = Scale(92);
     const int buttonGap = Scale(10);
 
-    MoveWindow(title_, margin, Scale(25), width - margin * 2 - Scale(230), Scale(48), TRUE);
-    MoveWindow(themeLabel_, width - margin - Scale(205), Scale(31), Scale(55), controlHeight, TRUE);
-    MoveWindow(themeCombo_, width - margin - Scale(145), Scale(27), Scale(145), Scale(160), TRUE);
-    MoveWindow(instruction_, margin, Scale(86), width - margin * 2, Scale(62), TRUE);
-    MoveWindow(monitorLabel_, margin, Scale(148), width - margin * 2, Scale(36), TRUE);
-    MoveWindow(clearTypeCheck_, margin, Scale(208), Scale(250), controlHeight, TRUE);
+    MoveWindow(title_, margin, Scale(22), width - margin * 2 - Scale(220), Scale(62), TRUE);
+    MoveWindow(themeLabel_, width - margin - Scale(205), Scale(29), Scale(55), controlHeight, TRUE);
+    MoveWindow(themeCombo_, width - margin - Scale(145), Scale(25), Scale(145), Scale(160), TRUE);
+    MoveWindow(instruction_, margin, Scale(92), width - margin * 2, Scale(58), TRUE);
+    MoveWindow(monitorLabel_, margin, Scale(150), width - margin * 2, Scale(42), TRUE);
+
+    MoveWindow(clearTypeCheck_, margin, Scale(186), Scale(250), controlHeight, TRUE);
+    MoveWindow(clearTypeDescription_, margin + Scale(24), Scale(218), width - margin * 2 - Scale(24), Scale(44), TRUE);
+    MoveWindow(tuneAllRadio_, margin, Scale(282), Scale(300), controlHeight, TRUE);
+    MoveWindow(tuneOneRadio_, margin, Scale(318), Scale(300), controlHeight, TRUE);
+    MoveWindow(monitorCombo_, margin + Scale(24), Scale(350), std::min(Scale(520), width - margin * 2 - Scale(24)), Scale(200), TRUE);
 
     const int buttonsY = height - margin - controlHeight;
     MoveWindow(cancelButton_, width - margin - buttonWidth, buttonsY, buttonWidth, controlHeight, TRUE);
@@ -496,7 +582,7 @@ void MainWindow::Layout() {
     }
 
     const std::size_t count = CandidateValues(model_.CurrentStage()).size();
-    const int contentTop = Scale(190);
+    const int contentTop = Scale(196);
     const int contentBottom = buttonsY - Scale(24);
     const int contentHeight = std::max(Scale(120), contentBottom - contentTop);
     const int contentWidth = width - margin * 2;
@@ -531,34 +617,93 @@ void MainWindow::SetText(HWND control, const std::wstring& text) const noexcept 
     SetWindowTextW(control, text.c_str());
 }
 
-std::wstring MainWindow::CurrentMonitorDescription() const {
-    if (monitors_.empty()) {
+void MainWindow::UpdateWelcomeControls() {
+    const bool allowMonitorSelection = clearTypeEnabled_ && monitors_.size() > 1;
+    const bool tuneOne = SendMessageW(tuneOneRadio_, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    EnableWindow(tuneAllRadio_, allowMonitorSelection ? TRUE : FALSE);
+    EnableWindow(tuneOneRadio_, allowMonitorSelection ? TRUE : FALSE);
+    EnableWindow(monitorCombo_, allowMonitorSelection && tuneOne ? TRUE : FALSE);
+}
+
+const MonitorDescriptor* MainWindow::CurrentMonitor() const noexcept {
+    const std::size_t modelIndex = model_.CurrentMonitorIndex();
+    if (modelIndex >= activeMonitorIndices_.size()) {
+        return nullptr;
+    }
+    const std::size_t physicalIndex = activeMonitorIndices_[modelIndex];
+    if (physicalIndex >= monitors_.size()) {
+        return nullptr;
+    }
+    return &monitors_[physicalIndex];
+}
+
+bool MainWindow::CurrentMonitorNeedsWarning() const noexcept {
+    const MonitorDescriptor* monitor = CurrentMonitor();
+    return monitor != nullptr &&
+        (monitor->portrait || (monitor->nativeResolutionKnown && !monitor->atNativeResolution));
+}
+
+std::wstring MainWindow::MonitorChoiceLabel(const std::size_t monitorIndex) const {
+    if (monitorIndex >= monitors_.size()) {
         return {};
     }
-    const auto& monitor = monitors_[std::min(model_.CurrentMonitorIndex(), monitors_.size() - 1)];
+    const auto& monitor = monitors_[monitorIndex];
+    std::wstring label = L"Display ";
+    label.append(std::to_wstring(monitorIndex + 1)).append(L": ").append(monitor.friendlyName);
+    label.append(L" — ").append(std::to_wstring(monitor.width)).append(L" × ").append(std::to_wstring(monitor.height));
+    if (monitor.primary) {
+        label.append(L" — primary");
+    }
+    return label;
+}
+
+std::wstring MainWindow::CurrentMonitorDescription() const {
+    const MonitorDescriptor* monitor = CurrentMonitor();
+    if (monitor == nullptr) {
+        return {};
+    }
     std::wstring description = L"Display ";
     description.append(std::to_wstring(model_.CurrentMonitorIndex() + 1));
-    description.append(L" of ").append(std::to_wstring(monitors_.size())).append(L": ");
-    description.append(monitor.friendlyName);
-    description.append(L" — ").append(std::to_wstring(monitor.width)).append(L" × ").append(std::to_wstring(monitor.height));
-    description.append(monitor.portrait ? L" (portrait)" : L" (landscape)");
-    if (monitor.primary) {
+    description.append(L" of ").append(std::to_wstring(model_.MonitorCount())).append(L": ");
+    description.append(monitor->friendlyName);
+    description.append(L" — ").append(std::to_wstring(monitor->width)).append(L" × ").append(std::to_wstring(monitor->height));
+    description.append(monitor->portrait ? L" (portrait)" : L" (landscape)");
+    if (monitor->primary) {
         description.append(L" — primary");
+    }
+    if (monitor->nativeResolutionKnown && !monitor->atNativeResolution) {
+        description.append(L" — preferred ").append(std::to_wstring(monitor->nativeWidth));
+        description.append(L" × ").append(std::to_wstring(monitor->nativeHeight));
     }
     return description;
 }
 
+std::wstring MainWindow::ResolutionWarningText() const {
+    const MonitorDescriptor* monitor = CurrentMonitor();
+    if (monitor == nullptr) {
+        return L"Review this monitor's display setup before continuing.";
+    }
+    const bool nonNative = monitor->nativeResolutionKnown && !monitor->atNativeResolution;
+    if (monitor->portrait && nonNative) {
+        return L"This display is rotated and is not using its preferred resolution. ClearType subpixel results can be less consistent in portrait mode, and text usually looks best at the panel's preferred resolution. You can continue without changing either setting.";
+    }
+    if (monitor->portrait) {
+        return L"This display is in portrait orientation. ClearType subpixel rendering is designed around a horizontal RGB or BGR stripe layout, so results can be less consistent after rotation. Continue and choose the samples that look best on this display.";
+    }
+    return L"This display is not using its preferred resolution. Text usually looks sharpest at the panel's preferred mode. ClearTune will not change the resolution automatically.";
+}
+
 std::wstring MainWindow::SampleInstruction() const {
     const int page = SamplePageNumber(model_.CurrentPage());
-    std::wstring text = L"Click the text sample that looks best to you (";
-    text.append(std::to_wstring(page)).append(L" of 5). This page tunes ");
+    std::wstring text = L"Sample ";
+    text.append(std::to_wstring(page)).append(L" of 5. This page tunes ");
     text.append(StageName(model_.CurrentStage())).append(L".");
     return text;
 }
 
 void MainWindow::MoveToCurrentMonitor() {
-    if (monitors_.empty() || model_.CurrentMonitorIndex() >= monitors_.size() ||
-        positionedMonitor_ == model_.CurrentMonitorIndex()) {
+    const MonitorDescriptor* monitor = CurrentMonitor();
+    if (monitor == nullptr || positionedMonitor_ == model_.CurrentMonitorIndex()) {
         return;
     }
 
@@ -566,10 +711,9 @@ void MainWindow::MoveToCurrentMonitor() {
     if (GetWindowRect(window_, &windowRect) == FALSE) {
         return;
     }
-    const auto& monitor = monitors_[model_.CurrentMonitorIndex()];
     MONITORINFO info{};
     info.cbSize = static_cast<DWORD>(sizeof(info));
-    if (GetMonitorInfoW(monitor.handle, &info) == FALSE) {
+    if (GetMonitorInfoW(monitor->handle, &info) == FALSE) {
         return;
     }
 
@@ -585,11 +729,18 @@ void MainWindow::MoveToCurrentMonitor() {
 
 void MainWindow::RefreshPage() {
     const WizardPage page = model_.CurrentPage();
+    const bool welcomePage = page == WizardPage::Welcome;
     const bool samplePage = model_.IsSamplePage();
+    const bool multipleMonitors = monitors_.size() > 1;
     if (page >= WizardPage::Resolution && page <= WizardPage::MonitorComplete) {
         MoveToCurrentMonitor();
     }
-    SetControlVisible(clearTypeCheck_, page == WizardPage::Welcome);
+
+    SetControlVisible(clearTypeCheck_, welcomePage);
+    SetControlVisible(clearTypeDescription_, welcomePage);
+    SetControlVisible(tuneAllRadio_, welcomePage && multipleMonitors);
+    SetControlVisible(tuneOneRadio_, welcomePage && multipleMonitors);
+    SetControlVisible(monitorCombo_, welcomePage && multipleMonitors);
     SetControlVisible(monitorLabel_, page >= WizardPage::Resolution && page <= WizardPage::MonitorComplete);
     for (std::size_t index = 0; index < sampleButtons_.size(); ++index) {
         const bool show = samplePage && index < CandidateValues(model_.CurrentStage()).size();
@@ -602,21 +753,15 @@ void MainWindow::RefreshPage() {
     switch (page) {
         case WizardPage::Welcome:
             SetText(title_, L"Make the text on your screen easier to read");
-            SetText(instruction_, L"This wizard helps you choose ClearType settings using samples that match a light or dark app surface. No settings are changed until you click Finish.");
+            SetText(instruction_, multipleMonitors
+                ? L"Choose whether to tune every active monitor or just one. No settings are changed until you click Finish."
+                : L"No settings are changed until you click Finish.");
             SetText(monitorLabel_, L"");
+            UpdateWelcomeControls();
             break;
-        case WizardPage::MonitorSelection: {
-            SetText(title_, L"Tune your active monitors");
-            std::wstring text = L"ClearTune detected ";
-            text.append(std::to_wstring(monitors_.size())).append(monitors_.size() == 1 ? L" active monitor. " : L" active monitors. ");
-            text.append(L"Each display will be tuned separately, beginning with the primary display.");
-            SetText(instruction_, text);
-            SetText(monitorLabel_, L"");
-            break;
-        }
         case WizardPage::Resolution:
-            SetText(title_, L"Check this monitor's resolution");
-            SetText(instruction_, L"Text generally looks best at the panel's native resolution. This version reports the current mode and does not change display resolution automatically.");
+            SetText(title_, L"Check this monitor's display setup");
+            SetText(instruction_, ResolutionWarningText());
             SetText(monitorLabel_, CurrentMonitorDescription());
             break;
         case WizardPage::PixelStructure:
@@ -631,16 +776,18 @@ void MainWindow::RefreshPage() {
             break;
         case WizardPage::MonitorComplete:
             SetText(title_, L"You have finished tuning this monitor");
-            if (model_.CurrentMonitorIndex() + 1 < monitors_.size()) {
-                SetText(instruction_, L"Click Next to continue with the next active monitor.");
+            if (model_.CurrentMonitorIndex() + 1 < model_.MonitorCount()) {
+                SetText(instruction_, L"Click Next to continue with the next selected monitor.");
             } else {
-                SetText(instruction_, L"Click Next to review and apply the settings for all tuned monitors.");
+                SetText(instruction_, L"Click Next to review and apply the selected settings.");
             }
             SetText(monitorLabel_, CurrentMonitorDescription());
             break;
         case WizardPage::Finish:
             if (clearTypeEnabled_) {
-                SetText(title_, L"You have finished tuning your monitors");
+                SetText(title_, model_.MonitorCount() == 1
+                    ? L"You have finished tuning this monitor"
+                    : L"You have finished tuning your monitors");
                 SetText(instruction_, L"Click Finish to apply the selected settings. If any write fails, the original ClearType configuration will be restored automatically.");
             } else {
                 SetText(title_, L"ClearType will be turned off");
@@ -660,6 +807,40 @@ void MainWindow::RefreshSampleButtons() {
     }
 }
 
+void MainWindow::PrepareSelectedMonitors() {
+    activeMonitorIndices_.clear();
+    const bool tuneAll = monitors_.size() <= 1 || SendMessageW(tuneAllRadio_, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    if (tuneAll) {
+        for (std::size_t index = 0; index < monitors_.size(); ++index) {
+            activeMonitorIndices_.push_back(index);
+        }
+    } else {
+        const LRESULT selection = SendMessageW(monitorCombo_, CB_GETCURSEL, 0, 0);
+        const std::size_t selectedIndex = selection == CB_ERR ? 0U : static_cast<std::size_t>(selection);
+        activeMonitorIndices_.push_back(std::min(selectedIndex, monitors_.size() - 1));
+    }
+
+    const auto& initialProfiles = settings_.InitialProfiles();
+    std::vector<ClearTypeProfile> profiles;
+    profiles.reserve(activeMonitorIndices_.size());
+    for (const std::size_t monitorIndex : activeMonitorIndices_) {
+        profiles.push_back(monitorIndex < initialProfiles.size() ? initialProfiles[monitorIndex] : ClearTypeProfile{});
+    }
+    model_ = WizardModel(std::move(profiles));
+    positionedMonitor_ = static_cast<std::size_t>(-1);
+}
+
+void MainWindow::SkipUnneededResolutionPage(const bool movingForward) {
+    if (model_.CurrentPage() != WizardPage::Resolution || CurrentMonitorNeedsWarning()) {
+        return;
+    }
+    if (movingForward) {
+        model_.Next();
+    } else {
+        model_.Back();
+    }
+}
+
 void MainWindow::NavigateNext() {
     if (model_.CurrentPage() == WizardPage::Welcome) {
         clearTypeEnabled_ = SendMessageW(clearTypeCheck_, BM_GETCHECK, 0, 0) == BST_CHECKED;
@@ -668,6 +849,11 @@ void MainWindow::NavigateNext() {
             RefreshPage();
             return;
         }
+        PrepareSelectedMonitors();
+        model_.Next();
+        SkipUnneededResolutionPage(true);
+        RefreshPage();
+        return;
     }
     if (model_.CurrentPage() == WizardPage::Finish) {
         std::wstring error;
@@ -679,11 +865,13 @@ void MainWindow::NavigateNext() {
         return;
     }
     model_.Next();
+    SkipUnneededResolutionPage(true);
     RefreshPage();
 }
 
 void MainWindow::NavigateBack() {
     if (model_.Back()) {
+        SkipUnneededResolutionPage(false);
         RefreshPage();
     }
 }
@@ -703,6 +891,14 @@ void MainWindow::ThemeSelectionChanged() {
     ApplyTheme();
 }
 
+void MainWindow::MonitorSelectionChanged() {
+    if (SendMessageW(tuneOneRadio_, BM_GETCHECK, 0, 0) == BST_CHECKED &&
+        SendMessageW(monitorCombo_, CB_GETCURSEL, 0, 0) == CB_ERR && !monitors_.empty()) {
+        SendMessageW(monitorCombo_, CB_SETCURSEL, 0, 0);
+    }
+    UpdateWelcomeControls();
+}
+
 bool MainWindow::ApplySettings(std::wstring& error) {
     const auto connected = EnumerateActiveMonitors();
     std::unordered_set<std::wstring> connectedKeys;
@@ -714,13 +910,18 @@ bool MainWindow::ApplySettings(std::wstring& error) {
     std::vector<ApplyTarget> targets;
     bool skippedMonitor = false;
     const auto& profiles = model_.Profiles();
-    for (std::size_t index = 0; index < monitors_.size() && index < profiles.size(); ++index) {
-        const auto& monitor = monitors_[index];
+    for (std::size_t modelIndex = 0; modelIndex < activeMonitorIndices_.size() && modelIndex < profiles.size(); ++modelIndex) {
+        const std::size_t physicalIndex = activeMonitorIndices_[modelIndex];
+        if (physicalIndex >= monitors_.size()) {
+            skippedMonitor = true;
+            continue;
+        }
+        const auto& monitor = monitors_[physicalIndex];
         if (!connectedKeys.contains(monitor.displayKey)) {
             skippedMonitor = true;
             continue;
         }
-        targets.push_back(ApplyTarget{monitor.displayKey, profiles[index], monitor.primary});
+        targets.push_back(ApplyTarget{monitor.displayKey, profiles[modelIndex], monitor.primary});
     }
     if (targets.empty()) {
         error = L"None of the monitors from this tuning session are still connected.";
