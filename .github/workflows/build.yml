@@ -29,7 +29,17 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -A x64
       - name: Build
-        run: cmake --build build --config Release --parallel
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --parallel 2>&1 | Tee-Object -FilePath windows-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload compiler log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-compiler-log
+          path: windows-build.log
+          if-no-files-found: error
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Package
