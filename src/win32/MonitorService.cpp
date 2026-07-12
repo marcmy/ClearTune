@@ -1,6 +1,7 @@
 #include "win32/MonitorService.h"
 
 #include "core/DisplayKey.h"
+#include "core/Resolution.h"
 
 #include <algorithm>
 #include <utility>
@@ -116,13 +117,12 @@ void PopulatePreferredModes(std::vector<MonitorDescriptor>& monitors) {
             monitor->nativeWidth = preferredMode.width;
             monitor->nativeHeight = preferredMode.height;
             monitor->nativeResolutionKnown = true;
-            if (monitor->portrait) {
-                monitor->atNativeResolution =
-                    monitor->width == monitor->nativeHeight && monitor->height == monitor->nativeWidth;
-            } else {
-                monitor->atNativeResolution =
-                    monitor->width == monitor->nativeWidth && monitor->height == monitor->nativeHeight;
-            }
+            monitor->atNativeResolution = MeetsOrExceedsPreferredResolution(
+                monitor->width,
+                monitor->height,
+                monitor->nativeWidth,
+                monitor->nativeHeight,
+                monitor->portrait);
         }
         return;
     }
