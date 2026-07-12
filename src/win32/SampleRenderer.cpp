@@ -44,7 +44,7 @@ bool SampleRenderer::Initialize(std::wstring& error) {
         DWRITE_FONT_WEIGHT_NORMAL,
         DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL,
-        16.0F,
+        12.0F,
         L"en-us",
         textFormat_.ReleaseAndGetAddressOf());
     if (FAILED(result)) {
@@ -128,7 +128,7 @@ bool SampleRenderer::DrawSample(
         std::clamp(parameters.enhancedContrast, 0.0F, 10.0F),
         std::clamp(parameters.clearTypeLevel, 0.0F, 1.0F),
         PixelGeometry(parameters.pixelGeometry),
-        DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
+        DWRITE_RENDERING_MODE_GDI_CLASSIC,
         renderingParams.ReleaseAndGetAddressOf());
     if (FAILED(parameterResult)) {
         error = MakeWindowsError(L"Unable to create sample rendering parameters", static_cast<unsigned long>(parameterResult));
@@ -152,7 +152,7 @@ bool SampleRenderer::DrawSample(
     renderTarget_->SetTransform(D2D1::Matrix3x2F::Identity());
     renderTarget_->Clear(background);
 
-    const D2D1_RECT_F textBounds = D2D1::RectF(14.0F, 10.0F, std::max(15.0F, width - 14.0F), std::max(11.0F, height - 10.0F));
+    const D2D1_RECT_F textBounds = D2D1::RectF(12.0F, 8.0F, std::max(13.0F, width - 12.0F), std::max(9.0F, height - 8.0F));
     renderTarget_->DrawTextW(
         text.data(),
         static_cast<UINT32>(text.size()),
@@ -160,7 +160,7 @@ bool SampleRenderer::DrawSample(
         textBounds,
         textBrush_.Get(),
         D2D1_DRAW_TEXT_OPTIONS_CLIP,
-        DWRITE_MEASURING_MODE_NATURAL);
+        DWRITE_MEASURING_MODE_GDI_CLASSIC);
 
     const float borderInset = selected ? 1.5F : 0.5F;
     renderTarget_->DrawRectangle(
