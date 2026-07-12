@@ -55,6 +55,9 @@ if(WIN32)
     )
     if(MSVC)
         target_compile_options(ClearTune PRIVATE /W4 /permissive- /EHsc /utf-8)
+        # app.rc embeds our custom DPI/compatibility manifest. Disable MSVC's
+        # automatically generated manifest to avoid a duplicate RT_MANIFEST/1.
+        target_link_options(ClearTune PRIVATE /MANIFEST:NO)
     endif()
     set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT ClearTune)
 endif()
