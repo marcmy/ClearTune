@@ -249,14 +249,19 @@ bool ClearTypeSettingsSession::Apply(
         return false;
     }
 
-    for (const auto& target : targets) {
-        if (!WriteDisplayProfile(target, error)) {
-            std::wstring rollbackError;
-            Restore(rollbackError);
-            if (!rollbackError.empty()) {
-                error.append(L"\nRollback also reported: ").append(rollbackError);
+    if (enableClearType) {
+        for (const auto& target : targets) {
+            if (!WriteDisplayProfile(target, error)) {
+                std::wstring rollbackError;
+                const bool restored = Restore(rollbackError);
+                if (!restored && rollbackError.empty()) {
+                    rollbackError = L"The original ClearType settings could not be fully restored.";
+                }
+                if (!rollbackError.empty()) {
+                    error.append(L"\nRollback also reported: ").append(rollbackError);
+                }
+                return false;
             }
-            return false;
         }
     }
 
@@ -264,7 +269,10 @@ bool ClearTypeSettingsSession::Apply(
     const ClearTypeProfile& globalProfile = (primary != targets.end() ? primary : targets.begin())->profile;
     if (!ApplyGlobal(globalProfile, enableClearType, error)) {
         std::wstring rollbackError;
-        Restore(rollbackError);
+        const bool restored = Restore(rollbackError);
+        if (!restored && rollbackError.empty()) {
+            rollbackError = L"The original ClearType settings could not be fully restored.";
+        }
         if (!rollbackError.empty()) {
             error.append(L"\nRollback also reported: ").append(rollbackError);
         }
