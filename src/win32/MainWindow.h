@@ -1,0 +1,89 @@
+#pragma once
+
+#include "core/Theme.h"
+#include "core/WizardModel.h"
+#include "win32/ClearTypeSettings.h"
+#include "win32/MonitorService.h"
+#include "win32/SampleRenderer.h"
+
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+
+#include <array>
+#include <cstddef>
+#include <string>
+#include <vector>
+
+namespace ctt::win32 {
+
+class MainWindow {
+public:
+    MainWindow(
+        HINSTANCE instance,
+        std::vector<MonitorDescriptor> monitors,
+        ClearTypeSettingsSession& settings,
+        ThemeMode themeMode);
+    ~MainWindow();
+
+    MainWindow(const MainWindow&) = delete;
+    MainWindow& operator=(const MainWindow&) = delete;
+
+    [[nodiscard]] bool CreateAndShow(int showCommand, std::wstring& error);
+    [[nodiscard]] HWND Handle() const noexcept;
+
+private:
+    static LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
+    LRESULT HandleMessage(UINT message, WPARAM wParam, LPARAM lParam);
+
+    [[nodiscard]] bool RegisterWindowClass(std::wstring& error);
+    [[nodiscard]] bool CreateControls(std::wstring& error);
+    void CreateFonts();
+    void DestroyFonts() noexcept;
+    void RecreateBackgroundBrush() noexcept;
+    void ApplyTheme();
+    void Layout();
+    void RefreshPage();
+    void MoveToCurrentMonitor();
+    void RefreshSampleButtons();
+    void SetControlVisible(HWND control, bool visible) const noexcept;
+    void SetText(HWND control, const std::wstring& text) const noexcept;
+    void NavigateNext();
+    void NavigateBack();
+    void SelectSample(std::size_t index);
+    void ThemeSelectionChanged();
+    [[nodiscard]] bool ApplySettings(std::wstring& error);
+    [[nodiscard]] std::wstring CurrentMonitorDescription() const;
+    [[nodiscard]] std::wstring SampleInstruction() const;
+    [[nodiscard]] bool IsDark() const noexcept;
+    [[nodiscard]] int Scale(int value) const noexcept;
+
+    HINSTANCE instance_{};
+    HWND window_{};
+    HWND title_{};
+    HWND instruction_{};
+    HWND monitorLabel_{};
+    HWND themeLabel_{};
+    HWND themeCombo_{};
+    HWND clearTypeCheck_{};
+    HWND backButton_{};
+    HWND nextButton_{};
+    HWND cancelButton_{};
+    std::array<HWND, 6> sampleButtons_{};
+
+    HFONT normalFont_{};
+    HFONT titleFont_{};
+    HBRUSH backgroundBrush_{};
+    UINT dpi_{96};
+
+    std::vector<MonitorDescriptor> monitors_;
+    ClearTypeSettingsSession& settings_;
+    WizardModel model_;
+    ThemeMode themeMode_{ThemeMode::System};
+    bool clearTypeEnabled_{true};
+    std::size_t positionedMonitor_{static_cast<std::size_t>(-1)};
+    SampleRenderer renderer_;
+};
+
+}  // namespace ctt::win32
