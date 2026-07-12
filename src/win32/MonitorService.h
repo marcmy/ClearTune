@@ -18,8 +18,12 @@ struct MonitorDescriptor {
     RECT bounds{};
     unsigned int width{};
     unsigned int height{};
+    unsigned int nativeWidth{};
+    unsigned int nativeHeight{};
     bool primary{};
     bool portrait{};
+    bool nativeResolutionKnown{};
+    bool atNativeResolution{};
 };
 
 [[nodiscard]] std::vector<MonitorDescriptor> EnumerateActiveMonitors();
