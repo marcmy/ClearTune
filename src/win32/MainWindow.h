@@ -57,6 +57,8 @@ private:
     void MonitorSelectionChanged();
     void PrepareSelectedMonitors();
     void SkipUnneededResolutionPage(bool movingForward);
+    void CancelAndClose();
+    [[nodiscard]] bool PreviewCurrentProfile(std::wstring& error);
     [[nodiscard]] bool ApplySettings(std::wstring& error);
     [[nodiscard]] const MonitorDescriptor* CurrentMonitor() const noexcept;
     [[nodiscard]] bool CurrentMonitorNeedsWarning() const noexcept;
@@ -95,6 +97,8 @@ private:
     WizardModel model_;
     ThemeMode themeMode_{ThemeMode::System};
     bool clearTypeEnabled_{true};
+    bool settingsCommitted_{false};
+    bool closing_{false};
     std::size_t positionedMonitor_{static_cast<std::size_t>(-1)};
     SampleRenderer renderer_;
 };
