@@ -39,7 +39,6 @@ int main() {
     CHECK(ctt::NormalizeDisplayKey(L"DISPLAY2") == L"DISPLAY2");
     CHECK(ctt::NormalizeDisplayKey(L"\\\\?\\DISPLAY3") == L"\\\\?\\DISPLAY3");
 
-
     using ctt::CalibrationStage;
     using ctt::ClearTypeProfile;
     CHECK(ctt::CandidateValues(CalibrationStage::PixelStructure).size() == 2);
@@ -47,6 +46,8 @@ int main() {
     CHECK(ctt::CandidateValues(CalibrationStage::ClearTypeLevel).size() == 6);
     CHECK(ctt::CandidateValues(CalibrationStage::TextContrast).size() == 6);
     CHECK(ctt::CandidateValues(CalibrationStage::EnhancedContrast).size() == 6);
+    CHECK(ctt::CandidateValues(CalibrationStage::Gamma).front() == 1000);
+    CHECK(ctt::CandidateValues(CalibrationStage::EnhancedContrast).back() == 500);
     CHECK(ctt::NearestCandidateIndex(CalibrationStage::Gamma, 2190) == 2);
 
     ClearTypeProfile profile{};
@@ -57,10 +58,12 @@ int main() {
 
     profile.gammaLevel = 2200;
     profile.clearTypeLevel = 80;
+    profile.textContrastLevel = 4;
     profile.enhancedContrastLevel = 150;
     const auto rendering = ctt::ToRenderingParameters(profile);
     CHECK(rendering.gamma > 2.19F && rendering.gamma < 2.21F);
     CHECK(rendering.clearTypeLevel > 0.79F && rendering.clearTypeLevel < 0.81F);
+    CHECK(rendering.enhancedContrast > 4.49F && rendering.enhancedContrast < 4.51F);
     CHECK(rendering.pixelGeometry == 2);
     CHECK(ctt::ToSpiContrast(ClearTypeProfile{.textContrastLevel = 6}) == 2200u);
     CHECK(ctt::ToSpiOrientation(ClearTypeProfile{.pixelStructure = 1}) == 1u);
@@ -80,8 +83,11 @@ int main() {
 
     ctt::WizardModel wizard(2);
     CHECK(wizard.CurrentPage() == ctt::WizardPage::Welcome);
-    wizard.Next();
-    wizard.Next();
+    CHECK(wizard.Next());
+    CHECK(wizard.CurrentPage() == ctt::WizardPage::Resolution);
+    CHECK(wizard.Back());
+    CHECK(wizard.CurrentPage() == ctt::WizardPage::Welcome);
+    CHECK(wizard.Next());
     CHECK(wizard.CurrentPage() == ctt::WizardPage::Resolution);
     wizard.Next();
     CHECK(wizard.CurrentPage() == ctt::WizardPage::PixelStructure);
