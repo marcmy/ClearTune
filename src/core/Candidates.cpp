@@ -6,10 +6,10 @@
 namespace ctt {
 namespace {
 constexpr std::array<int, 2> kPixelStructure{1, 2};
-constexpr std::array<int, 3> kGamma{1400, 1800, 2200};
+constexpr std::array<int, 3> kGamma{1000, 1400, 2200};
 constexpr std::array<int, 6> kClearTypeLevel{0, 20, 40, 60, 80, 100};
 constexpr std::array<int, 6> kTextContrast{0, 1, 2, 3, 4, 6};
-constexpr std::array<int, 6> kEnhancedContrast{0, 50, 100, 150, 200, 300};
+constexpr std::array<int, 6> kEnhancedContrast{0, 50, 100, 200, 350, 500};
 }
 
 std::span<const int> CandidateValues(const CalibrationStage stage) noexcept {
