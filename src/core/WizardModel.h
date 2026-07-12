@@ -10,7 +10,6 @@ namespace ctt {
 
 enum class WizardPage {
     Welcome,
-    MonitorSelection,
     Resolution,
     PixelStructure,
     Gamma,
