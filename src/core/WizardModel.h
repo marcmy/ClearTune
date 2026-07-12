@@ -12,10 +12,10 @@ enum class WizardPage {
     Welcome,
     Resolution,
     PixelStructure,
-    Gamma,
-    ClearTypeLevel,
-    TextContrast,
     EnhancedContrast,
+    ClearTypeLevel,
+    ContrastCombination,
+    GrayscaleEnhancedContrast,
     MonitorComplete,
     Finish,
 };
