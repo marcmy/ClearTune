@@ -18,7 +18,7 @@ constexpr wchar_t kClearTypeLevel[] = L"ClearTypeLevel";
 constexpr wchar_t kTextContrastLevel[] = L"TextContrastLevel";
 constexpr wchar_t kEnhancedContrastLevel[] = L"EnhancedContrastLevel";
 constexpr wchar_t kGrayscaleEnhancedContrastLevel[] = L"GrayscaleEnhancedContrastLevel";
-constexpr UINT kApplyFlags = SPIF_UPDATEINIFILE | SPIF_SENDCHANGE;
+constexpr UINT kPersistentApplyFlags = SPIF_UPDATEINIFILE | SPIF_SENDCHANGE;
 
 std::wstring DisplayPath(const std::wstring_view displayKey) {
     std::wstring path{kAvalonBaseKey};
@@ -93,18 +93,33 @@ PVOID SpiValue(const UINT value) noexcept {
     return reinterpret_cast<PVOID>(static_cast<ULONG_PTR>(value));
 }
 
-bool SetSpi(const UINT action, const UINT parameter, PVOID value, std::wstring_view operation, std::wstring& error) {
-    if (SystemParametersInfoW(action, parameter, value, kApplyFlags) == FALSE) {
+bool SetSpi(
+    const UINT action,
+    const UINT parameter,
+    PVOID value,
+    const UINT flags,
+    const std::wstring_view operation,
+    std::wstring& error) {
+    if (SystemParametersInfoW(action, parameter, value, flags) == FALSE) {
         error = MakeWindowsError(operation, GetLastError());
         return false;
     }
     return true;
 }
 
+void RedrawAllWindows() noexcept {
+    RedrawWindow(
+        nullptr,
+        nullptr,
+        nullptr,
+        RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+}
+
 }  // namespace
 
 bool ClearTypeSettingsSession::Capture(std::span<const std::wstring> displayKeys, std::wstring& error) {
     captured_ = false;
+    previewActive_ = false;
     displays_.clear();
     initialProfiles_.clear();
 
@@ -130,7 +145,9 @@ bool ClearTypeSettingsSession::Capture(std::span<const std::wstring> displayKeys
             snapshot.grayscaleEnhancedContrastLevel = ReadDword(key, kGrayscaleEnhancedContrastLevel);
             RegCloseKey(key);
         } else if (openStatus != ERROR_FILE_NOT_FOUND) {
-            error = MakeWindowsError(L"Unable to read ClearType settings for " + displayKey, static_cast<unsigned long>(openStatus));
+            error = MakeWindowsError(
+                L"Unable to read ClearType settings for " + displayKey,
+                static_cast<unsigned long>(openStatus));
             return false;
         }
         ClearTypeProfile profile = ProfileFromSnapshot(snapshot);
@@ -183,7 +200,9 @@ bool ClearTypeSettingsSession::WriteDisplayProfile(const ApplyTarget& target, st
         &key,
         nullptr);
     if (createStatus != ERROR_SUCCESS) {
-        error = MakeWindowsError(L"Unable to open ClearType settings for " + target.displayKey, static_cast<unsigned long>(createStatus));
+        error = MakeWindowsError(
+            L"Unable to open ClearType settings for " + target.displayKey,
+            static_cast<unsigned long>(createStatus));
         return false;
     }
 
@@ -193,7 +212,8 @@ bool ClearTypeSettingsSession::WriteDisplayProfile(const ApplyTarget& target, st
         {kClearTypeLevel, static_cast<DWORD>(std::clamp(target.profile.clearTypeLevel, 0, 100))},
         {kTextContrastLevel, static_cast<DWORD>(std::clamp(target.profile.textContrastLevel, 0, 6))},
         {kEnhancedContrastLevel, static_cast<DWORD>(std::clamp(target.profile.enhancedContrastLevel, 0, 1000))},
-        {kGrayscaleEnhancedContrastLevel, static_cast<DWORD>(std::clamp(target.profile.grayscaleEnhancedContrastLevel, 0, 1000))},
+        {kGrayscaleEnhancedContrastLevel,
+         static_cast<DWORD>(std::clamp(target.profile.grayscaleEnhancedContrastLevel, 0, 1000))},
     }};
 
     bool success = true;
@@ -210,12 +230,25 @@ bool ClearTypeSettingsSession::WriteDisplayProfile(const ApplyTarget& target, st
 bool ClearTypeSettingsSession::ApplyGlobal(
     const ClearTypeProfile& primaryProfile,
     const bool enableClearType,
+    const UINT flags,
     std::wstring& error) {
-    if (!SetSpi(SPI_SETFONTSMOOTHING, enableClearType ? TRUE : FALSE, nullptr, L"Unable to set font smoothing state", error)) {
+    if (!SetSpi(
+            SPI_SETFONTSMOOTHING,
+            enableClearType ? TRUE : FALSE,
+            nullptr,
+            flags,
+            L"Unable to set font smoothing state",
+            error)) {
         return false;
     }
     const UINT type = enableClearType ? FE_FONTSMOOTHINGCLEARTYPE : FE_FONTSMOOTHINGSTANDARD;
-    if (!SetSpi(SPI_SETFONTSMOOTHINGTYPE, 0, SpiValue(type), L"Unable to set font smoothing type", error)) {
+    if (!SetSpi(
+            SPI_SETFONTSMOOTHINGTYPE,
+            0,
+            SpiValue(type),
+            flags,
+            L"Unable to set font smoothing type",
+            error)) {
         return false;
     }
     if (!enableClearType) {
@@ -225,6 +258,7 @@ bool ClearTypeSettingsSession::ApplyGlobal(
             SPI_SETFONTSMOOTHINGCONTRAST,
             0,
             SpiValue(ToSpiContrast(primaryProfile)),
+            flags,
             L"Unable to set font smoothing contrast",
             error)) {
         return false;
@@ -233,11 +267,38 @@ bool ClearTypeSettingsSession::ApplyGlobal(
             SPI_SETFONTSMOOTHINGORIENTATION,
             0,
             SpiValue(ToSpiOrientation(primaryProfile)),
+            flags,
             L"Unable to set font smoothing orientation",
             error)) {
         return false;
     }
     return true;
+}
+
+bool ClearTypeSettingsSession::Preview(
+    const ClearTypeProfile& profile,
+    const bool enableClearType,
+    std::wstring& error) {
+    if (!captured_) {
+        error = L"ClearType settings were not captured before Preview.";
+        return false;
+    }
+    if (!ApplyGlobal(profile, enableClearType, 0, error)) {
+        return false;
+    }
+    previewActive_ = true;
+    RedrawAllWindows();
+    return true;
+}
+
+bool ClearTypeSettingsSession::RestorePreview(std::wstring& error) {
+    if (!captured_ || !previewActive_) {
+        return true;
+    }
+    const bool success = RestoreGlobal(0, error);
+    previewActive_ = false;
+    RedrawAllWindows();
+    return success;
 }
 
 bool ClearTypeSettingsSession::Apply(
@@ -265,9 +326,10 @@ bool ClearTypeSettingsSession::Apply(
         }
     }
 
-    const auto primary = std::find_if(targets.begin(), targets.end(), [](const ApplyTarget& target) { return target.primary; });
+    const auto primary = std::find_if(
+        targets.begin(), targets.end(), [](const ApplyTarget& target) { return target.primary; });
     const ClearTypeProfile& globalProfile = (primary != targets.end() ? primary : targets.begin())->profile;
-    if (!ApplyGlobal(globalProfile, enableClearType, error)) {
+    if (!ApplyGlobal(globalProfile, enableClearType, kPersistentApplyFlags, error)) {
         std::wstring rollbackError;
         const bool restored = Restore(rollbackError);
         if (!restored && rollbackError.empty()) {
@@ -279,6 +341,7 @@ bool ClearTypeSettingsSession::Apply(
         return false;
     }
 
+    previewActive_ = false;
     SendMessageTimeoutW(
         HWND_BROADCAST,
         WM_SETTINGCHANGE,
@@ -304,7 +367,9 @@ bool ClearTypeSettingsSession::RestoreDisplay(const PerDisplaySnapshot& snapshot
         &key,
         nullptr);
     if (createStatus != ERROR_SUCCESS) {
-        error = MakeWindowsError(L"Unable to restore ClearType settings for " + snapshot.displayKey, static_cast<unsigned long>(createStatus));
+        error = MakeWindowsError(
+            L"Unable to restore ClearType settings for " + snapshot.displayKey,
+            static_cast<unsigned long>(createStatus));
         return false;
     }
 
@@ -333,26 +398,49 @@ bool ClearTypeSettingsSession::RestoreDisplay(const PerDisplaySnapshot& snapshot
     if (success && !snapshot.keyExisted) {
         const LSTATUS deleteStatus = RegDeleteKeyW(HKEY_CURRENT_USER, path.c_str());
         if (deleteStatus != ERROR_SUCCESS && deleteStatus != ERROR_FILE_NOT_FOUND) {
-            error = MakeWindowsError(L"Unable to remove temporary ClearType display key", static_cast<unsigned long>(deleteStatus));
+            error = MakeWindowsError(
+                L"Unable to remove temporary ClearType display key",
+                static_cast<unsigned long>(deleteStatus));
             success = false;
         }
     }
     return success;
 }
 
-bool ClearTypeSettingsSession::RestoreGlobal(std::wstring& error) {
+bool ClearTypeSettingsSession::RestoreGlobal(const UINT flags, std::wstring& error) {
     bool success = true;
-    if (!SetSpi(SPI_SETFONTSMOOTHING, global_.enabled ? TRUE : FALSE, nullptr, L"Unable to restore font smoothing state", error)) {
-        success = false;
-    }
-    if (!SetSpi(SPI_SETFONTSMOOTHINGTYPE, 0, SpiValue(global_.type), L"Unable to restore font smoothing type", error)) {
-        success = false;
-    }
-    if (!SetSpi(SPI_SETFONTSMOOTHINGCONTRAST, 0, SpiValue(global_.contrast), L"Unable to restore font smoothing contrast", error)) {
-        success = false;
-    }
-    if (!SetSpi(SPI_SETFONTSMOOTHINGORIENTATION, 0, SpiValue(global_.orientation), L"Unable to restore font smoothing orientation", error)) {
-        success = false;
+    std::wstring firstError;
+    const auto restore = [&](const UINT action, const UINT parameter, PVOID value, const wchar_t* operation) {
+        std::wstring valueError;
+        if (!SetSpi(action, parameter, value, flags, operation, valueError)) {
+            success = false;
+            if (firstError.empty()) {
+                firstError = std::move(valueError);
+            }
+        }
+    };
+    restore(
+        SPI_SETFONTSMOOTHING,
+        global_.enabled ? TRUE : FALSE,
+        nullptr,
+        L"Unable to restore font smoothing state");
+    restore(
+        SPI_SETFONTSMOOTHINGTYPE,
+        0,
+        SpiValue(global_.type),
+        L"Unable to restore font smoothing type");
+    restore(
+        SPI_SETFONTSMOOTHINGCONTRAST,
+        0,
+        SpiValue(global_.contrast),
+        L"Unable to restore font smoothing contrast");
+    restore(
+        SPI_SETFONTSMOOTHINGORIENTATION,
+        0,
+        SpiValue(global_.orientation),
+        L"Unable to restore font smoothing orientation");
+    if (!firstError.empty()) {
+        error = std::move(firstError);
     }
     return success;
 }
@@ -372,12 +460,13 @@ bool ClearTypeSettingsSession::Restore(std::wstring& error) {
         }
     }
     std::wstring globalError;
-    if (!RestoreGlobal(globalError)) {
+    if (!RestoreGlobal(kPersistentApplyFlags, globalError)) {
         success = false;
         if (error.empty()) {
             error = std::move(globalError);
         }
     }
+    previewActive_ = false;
     return success;
 }
 
