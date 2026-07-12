@@ -45,6 +45,8 @@ struct ApplyTarget {
 class ClearTypeSettingsSession {
 public:
     [[nodiscard]] bool Capture(std::span<const std::wstring> displayKeys, std::wstring& error);
+    [[nodiscard]] bool Preview(const ClearTypeProfile& profile, bool enableClearType, std::wstring& error);
+    [[nodiscard]] bool RestorePreview(std::wstring& error);
     [[nodiscard]] bool Apply(std::span<const ApplyTarget> targets, bool enableClearType, std::wstring& error);
     [[nodiscard]] bool Restore(std::wstring& error);
 
@@ -53,8 +55,12 @@ public:
 
 private:
     [[nodiscard]] bool CaptureGlobal(std::wstring& error);
-    [[nodiscard]] bool ApplyGlobal(const ClearTypeProfile& primaryProfile, bool enableClearType, std::wstring& error);
-    [[nodiscard]] bool RestoreGlobal(std::wstring& error);
+    [[nodiscard]] bool ApplyGlobal(
+        const ClearTypeProfile& primaryProfile,
+        bool enableClearType,
+        UINT flags,
+        std::wstring& error);
+    [[nodiscard]] bool RestoreGlobal(UINT flags, std::wstring& error);
     [[nodiscard]] bool WriteDisplayProfile(const ApplyTarget& target, std::wstring& error);
     [[nodiscard]] bool RestoreDisplay(const PerDisplaySnapshot& snapshot, std::wstring& error);
 
@@ -62,6 +68,7 @@ private:
     std::vector<PerDisplaySnapshot> displays_;
     std::vector<ClearTypeProfile> initialProfiles_;
     bool captured_{false};
+    bool previewActive_{false};
 };
 
 }  // namespace ctt::win32
