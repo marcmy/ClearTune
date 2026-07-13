@@ -37,7 +37,8 @@ struct MonitorLayoutItem {
     int canvasWidth,
     int canvasHeight,
     int padding,
-    int labelHeight) noexcept;
+    int labelHeight,
+    int monitorGap = 0) noexcept;
 
 [[nodiscard]] std::optional<std::size_t> HitTestMonitorLayout(
     std::span<const MonitorLayoutItem> items,
