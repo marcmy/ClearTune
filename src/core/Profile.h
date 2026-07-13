@@ -17,12 +17,14 @@ struct ClearTypeProfile {
 
 [[nodiscard]] constexpr ClearTypeProfile MakeStockWorkingProfile(
     const ClearTypeProfile& capturedProfile,
+    const bool capturedGammaPresent,
     const int monitorGammaLevel) noexcept {
-    ClearTypeProfile workingProfile;
-    workingProfile.pixelStructure = capturedProfile.pixelStructure == 2 ? 2 : 1;
-    workingProfile.gammaLevel = monitorGammaLevel >= 1000
-        ? std::clamp(monitorGammaLevel, 1000, 5000)
-        : 1800;
+    ClearTypeProfile workingProfile = capturedProfile;
+    if (!capturedGammaPresent) {
+        workingProfile.gammaLevel = monitorGammaLevel >= 1000
+            ? std::clamp(monitorGammaLevel, 1000, 5000)
+            : 1800;
+    }
     return workingProfile;
 }
 
