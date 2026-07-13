@@ -4,7 +4,7 @@
 
 ClearTune is a clean-room, native C++/Win32 ClearType calibration wizard with genuine light and dark sample polarity.
 
-Windows' built-in ClearType tuner presents dark text on a light background. ClearTune keeps the same uncomplicated **choose the clearest sample** flow, but lets the calibration surface use **System**, **Light**, or **Dark** mode. You can tune every active monitor or select a single display.
+Windows' built-in ClearType tuner presents dark text on a light background. ClearTune keeps the same uncomplicated **choose the clearest sample** flow, but lets the calibration surface use **System**, **Light**, or **Dark** mode. You can tune every active monitor or select a single display from an interactive map of the real Windows display arrangement.
 
 > **Project status:** early alpha. The portable core and Windows x64 builds are tested in GitHub Actions; real-monitor visual validation is still required before publishing a release.
 
@@ -14,7 +14,8 @@ Light text on a dark surface is visually more forgiving, so differences between 
 
 1. Use **Light** polarity to identify the clearest sample.
 2. Use **Compare Dark** to verify that the same selection remains comfortable and does not show distracting glow or color fringing.
-3. Review the selected profile in both polarities on the Finish screen before saving it.
+3. When tuning multiple displays, review each monitor's selected profile in both polarities before continuing.
+4. Review the final monitor once more before saving the complete session.
 
 The Compare control never changes the saved theme preference or the current selection.
 
@@ -26,15 +27,22 @@ The Compare control never changes the saved theme preference or the current sele
 - Shows that global stage once per tuning session and skips it on subsequent monitors, matching `cttune.exe`.
 - Three-state **System / Light / Dark** selector.
 - One-click opposite-polarity comparison without changing the remembered theme.
-- Final side-by-side Light and Dark previews of the selected profile.
+- Side-by-side Light and Dark review after each monitor when tuning multiple displays.
+- Final side-by-side Light and Dark preview of the exact profile that will be saved for the final monitor.
 - `System` follows the Windows app theme. A manual Light or Dark choice is remembered until changed.
 - Light mode renders dark text on a near-white surface.
 - Dark mode renders light text on the standard near-black Windows app surface.
 - Tunes all active monitors or one selected monitor.
+- Shows the real relative monitor arrangement, including portrait displays and negative desktop coordinates.
+- Uses the monitor's EDID/DisplayConfig model name when Windows exposes it, rather than settling for `Generic PnP Monitor`.
+- Adds subtle spacing between monitor tiles and breathing room around hover and selection outlines.
+- Supports mouse hover, click selection, and keyboard arrows in the monitor map.
+- Clicking a monitor automatically switches from all-monitor tuning to single-monitor tuning.
 - Skips the display-setup page when a landscape monitor is already using an acceptable resolution.
 - Shows a warning only for portrait orientation or a known reduced resolution.
 - Uses the stock-style DirectWrite bitmap-render-target path and Calibri 11-point samples.
 - Previews the selected global ClearType settings as you advance through the wizard.
+- Treats navigation transactionally: every **Back** restores the exact working state from before the corresponding **Next**.
 - Restores the original global settings when you cancel or return to the opening page.
 - Persists per-monitor and global settings only when you click **Finish**.
 - Captures global and per-display ClearType values before the session.
@@ -51,7 +59,7 @@ The app reads and writes the same user-scoped settings used by Windows font rend
 HKCU\Software\Microsoft\Avalon.Graphics\DISPLAY…
 ```
 
-During calibration, ClearTune temporarily previews the compatible global font-smoothing values through `SystemParametersInfoW`, using non-persistent calls. Cancel and Back-to-start restore the launch snapshot. Per-monitor registry values and persistent global settings are written only when **Finish** is clicked. A failed final apply automatically restores the launch snapshot.
+During calibration, ClearTune temporarily previews the compatible global font-smoothing values through `SystemParametersInfoW`, using non-persistent calls. Each Back reverses the previous page commit, while Cancel and Back-to-start restore the launch snapshot. Per-monitor registry values and persistent global settings are written only when **Finish** is clicked. A failed final apply automatically restores the launch snapshot.
 
 For an independent before/after record, run:
 
@@ -86,7 +94,7 @@ build\Release\ClearTune.exe
 
 ### Portable core tests
 
-The non-Windows model, candidate, theme, conversion, and wizard logic can also be tested with Ninja:
+The non-Windows model, candidate, theme, conversion, monitor-identity, monitor-layout, and wizard logic can also be tested with Ninja:
 
 ```bash
 cmake -S . -B build -G Ninja

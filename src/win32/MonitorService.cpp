@@ -1,6 +1,7 @@
 #include "win32/MonitorService.h"
 
 #include "core/DisplayKey.h"
+#include "core/MonitorIdentity.h"
 #include "core/Resolution.h"
 
 #include <algorithm>
@@ -13,10 +14,11 @@
 namespace ctt::win32 {
 namespace {
 
-constexpr wchar_t kRegistryMachinePrefix[] = L"\\Registry\\Machine\\";
-constexpr wchar_t kDisplayEnumBase[] = L"SYSTEM\\CurrentControlSet\\Enum\\DISPLAY";
+constexpr wchar_t kRegistryMachinePrefix[] = LR"(\Registry\Machine\)";
+constexpr wchar_t kDisplayEnumBase[] = LR"(SYSTEM\CurrentControlSet\Enum\DISPLAY)";
 constexpr wchar_t kDeviceParameters[] = L"Device Parameters";
 constexpr wchar_t kEdidValue[] = L"EDID";
+constexpr wchar_t kPathSeparator = static_cast<wchar_t>(0x5C);
 constexpr std::size_t kEdidGammaOffset = 0x17;
 
 std::optional<int> GammaFromEdid(const std::vector<BYTE>& edid) noexcept {
@@ -72,11 +74,11 @@ std::optional<std::wstring> MonitorHardwareId(const wchar_t* deviceId) {
         return std::nullopt;
     }
     const std::wstring_view id{deviceId};
-    const std::size_t firstSeparator = id.find(L'\\');
+    const std::size_t firstSeparator = id.find(kPathSeparator);
     if (firstSeparator == std::wstring_view::npos) {
         return std::nullopt;
     }
-    const std::size_t secondSeparator = id.find(L'\\', firstSeparator + 1);
+    const std::size_t secondSeparator = id.find(kPathSeparator, firstSeparator + 1);
     const std::wstring_view hardwareId = id.substr(
         firstSeparator + 1,
         secondSeparator == std::wstring_view::npos
@@ -89,13 +91,13 @@ std::optional<std::wstring> MonitorHardwareId(const wchar_t* deviceId) {
 }
 
 std::optional<int> ReadMonitorGamma(const DISPLAY_DEVICEW& monitor) {
-    // Some drivers expose a directly usable Enum registry path in DeviceKey.
+    const std::wstring separator(1, kPathSeparator);
     if (monitor.DeviceKey[0] != L'\0') {
         std::wstring path{monitor.DeviceKey};
         if (path.starts_with(kRegistryMachinePrefix)) {
             path.erase(0, std::size(kRegistryMachinePrefix) - 1);
         }
-        if (const auto direct = ReadEdidGamma(HKEY_LOCAL_MACHINE, path + L"\\" + kDeviceParameters)) {
+        if (const auto direct = ReadEdidGamma(HKEY_LOCAL_MACHINE, path + separator + kDeviceParameters)) {
             return direct;
         }
         if (const auto direct = ReadEdidGamma(HKEY_LOCAL_MACHINE, path)) {
@@ -103,12 +105,11 @@ std::optional<int> ReadMonitorGamma(const DISPLAY_DEVICEW& monitor) {
         }
     }
 
-    // The common path is Enum\DISPLAY\<hardware-id>\<instance>\Device Parameters.
     const auto hardwareId = MonitorHardwareId(monitor.DeviceID);
     if (!hardwareId) {
         return std::nullopt;
     }
-    const std::wstring hardwarePath = std::wstring{kDisplayEnumBase} + L"\\" + *hardwareId;
+    const std::wstring hardwarePath = std::wstring{kDisplayEnumBase} + separator + *hardwareId;
     HKEY hardwareKey = nullptr;
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, hardwarePath.c_str(), 0, KEY_ENUMERATE_SUB_KEYS, &hardwareKey) != ERROR_SUCCESS) {
         return std::nullopt;
@@ -134,7 +135,7 @@ std::optional<int> ReadMonitorGamma(const DISPLAY_DEVICEW& monitor) {
             continue;
         }
         const std::wstring parametersPath =
-            hardwarePath + L"\\" + std::wstring{instanceName.data(), nameLength} + L"\\" + kDeviceParameters;
+            hardwarePath + separator + std::wstring{instanceName.data(), nameLength} + separator + kDeviceParameters;
         result = ReadEdidGamma(HKEY_LOCAL_MACHINE, parametersPath);
     }
     RegCloseKey(hardwareKey);
@@ -146,9 +147,10 @@ void PopulateMonitorIdentity(const wchar_t* adapterName, MonitorDescriptor& desc
     monitor.cb = static_cast<DWORD>(sizeof(monitor));
     for (DWORD index = 0; EnumDisplayDevicesW(adapterName, index, &monitor, 0) != FALSE; ++index) {
         if ((monitor.StateFlags & DISPLAY_DEVICE_ACTIVE) != 0) {
-            if (monitor.DeviceString[0] != L'\0') {
-                descriptor.friendlyName = monitor.DeviceString;
-            }
+            descriptor.friendlyName = ChooseMonitorFriendlyName(
+                monitor.DeviceString,
+                L"",
+                adapterName);
             if (const auto gamma = ReadMonitorGamma(monitor)) {
                 descriptor.gammaLevel = *gamma;
                 descriptor.gammaKnown = true;
@@ -161,8 +163,11 @@ void PopulateMonitorIdentity(const wchar_t* adapterName, MonitorDescriptor& desc
 
     DISPLAY_DEVICEW adapter{};
     adapter.cb = static_cast<DWORD>(sizeof(adapter));
-    if (EnumDisplayDevicesW(adapterName, 0, &adapter, 0) != FALSE && adapter.DeviceString[0] != L'\0') {
-        descriptor.friendlyName = adapter.DeviceString;
+    if (EnumDisplayDevicesW(adapterName, 0, &adapter, 0) != FALSE) {
+        descriptor.friendlyName = ChooseMonitorFriendlyName(
+            adapter.DeviceString,
+            L"",
+            adapterName);
     } else {
         descriptor.friendlyName = adapterName;
     }
@@ -237,19 +242,32 @@ void PopulatePreferredModes(std::vector<MonitorDescriptor>& monitors) {
                 continue;
             }
 
+            const auto monitor = std::find_if(monitors.begin(), monitors.end(), [&](const MonitorDescriptor& candidate) {
+                return candidate.deviceName == sourceName.viewGdiDeviceName;
+            });
+            if (monitor == monitors.end()) {
+                continue;
+            }
+
+            DISPLAYCONFIG_TARGET_DEVICE_NAME targetName{};
+            targetName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+            targetName.header.size = static_cast<UINT32>(sizeof(targetName));
+            targetName.header.adapterId = path.targetInfo.adapterId;
+            targetName.header.id = path.targetInfo.id;
+            if (DisplayConfigGetDeviceInfo(&targetName.header) == ERROR_SUCCESS) {
+                monitor->friendlyName = ChooseMonitorFriendlyName(
+                    monitor->friendlyName,
+                    targetName.monitorFriendlyDeviceName,
+                    monitor->deviceName);
+            }
+
             DISPLAYCONFIG_TARGET_PREFERRED_MODE preferredMode{};
             preferredMode.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_PREFERRED_MODE;
             preferredMode.header.size = static_cast<UINT32>(sizeof(preferredMode));
             preferredMode.header.adapterId = path.targetInfo.adapterId;
             preferredMode.header.id = path.targetInfo.id;
-            if (DisplayConfigGetDeviceInfo(&preferredMode.header) != ERROR_SUCCESS) {
-                continue;
-            }
-
-            const auto monitor = std::find_if(monitors.begin(), monitors.end(), [&](const MonitorDescriptor& candidate) {
-                return candidate.deviceName == sourceName.viewGdiDeviceName;
-            });
-            if (monitor == monitors.end() || preferredMode.width == 0 || preferredMode.height == 0) {
+            if (DisplayConfigGetDeviceInfo(&preferredMode.header) != ERROR_SUCCESS ||
+                preferredMode.width == 0 || preferredMode.height == 0) {
                 continue;
             }
 

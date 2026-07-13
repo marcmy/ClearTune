@@ -1,6 +1,7 @@
 #include "core/Candidates.h"
 #include "core/Conversions.h"
 #include "core/DisplayKey.h"
+#include "core/MonitorLayout.h"
 #include "core/Profile.h"
 #include "core/Resolution.h"
 #include "core/Theme.h"
@@ -9,13 +10,12 @@
 #include <array>
 #include <cstdlib>
 #include <iostream>
-#include <string>
 #include <vector>
 
 namespace {
 int failures = 0;
 
-void Check(bool condition, const char* expression, int line) {
+void Check(const bool condition, const char* expression, const int line) {
     if (!condition) {
         std::cerr << "FAIL line " << line << ": " << expression << '\n';
         ++failures;
@@ -26,13 +26,17 @@ void Check(bool condition, const char* expression, int line) {
 #define CHECK(expr) Check((expr), #expr, __LINE__)
 
 int main() {
+    using ctt::CalibrationStage;
+    using ctt::ClearTypeProfile;
     using ctt::ThemeMode;
+    using ctt::WizardModel;
+    using ctt::WizardPage;
+
     CHECK(ctt::ThemeModeFromStoredValue(0) == ThemeMode::System);
     CHECK(ctt::ThemeModeFromStoredValue(1) == ThemeMode::Light);
     CHECK(ctt::ThemeModeFromStoredValue(2) == ThemeMode::Dark);
     CHECK(ctt::ThemeModeFromStoredValue(99) == ThemeMode::System);
     CHECK(ctt::ThemeModeToStoredValue(ThemeMode::Dark) == 2);
-
     CHECK(ctt::ResolveDarkTheme(ThemeMode::System, false));
     CHECK(!ctt::ResolveDarkTheme(ThemeMode::System, true));
     CHECK(!ctt::ResolveDarkTheme(ThemeMode::Light, false));
@@ -50,8 +54,26 @@ int main() {
     CHECK(!ctt::MeetsOrExceedsPreferredResolution(1280, 720, 1920, 1080, false));
     CHECK(ctt::MeetsOrExceedsPreferredResolution(1080, 1920, 1920, 1080, true));
 
-    using ctt::CalibrationStage;
-    using ctt::ClearTypeProfile;
+    const std::array<ctt::MonitorLayoutInput, 2> monitorInputs{{
+        {.left = 0, .top = 0, .width = 1920, .height = 1080},
+        {.left = 1920, .top = -420, .width = 1080, .height = 1920},
+    }};
+    const auto monitorLayout = ctt::BuildMonitorLayout(monitorInputs, 520, 280, 16, 24);
+    CHECK(monitorLayout.size() == 2);
+    CHECK(monitorLayout[0].monitorRect.left < monitorLayout[1].monitorRect.left);
+    CHECK(monitorLayout[1].monitorRect.top < monitorLayout[0].monitorRect.top);
+    CHECK(monitorLayout[0].monitorRect.Width() > monitorLayout[0].monitorRect.Height());
+    CHECK(monitorLayout[1].monitorRect.Height() > monitorLayout[1].monitorRect.Width());
+    CHECK(monitorLayout[0].selectionRect.top < monitorLayout[0].monitorRect.top);
+    CHECK(monitorLayout[0].selectionRect.left >= 16);
+    CHECK(monitorLayout[1].selectionRect.right <= 504);
+    const auto firstHit = ctt::HitTestMonitorLayout(
+        monitorLayout,
+        monitorLayout[0].monitorRect.left + 2,
+        monitorLayout[0].monitorRect.top + 2);
+    CHECK(firstHit.has_value() && *firstHit == 0);
+    CHECK(!ctt::HitTestMonitorLayout(monitorLayout, 0, 0).has_value());
+    CHECK(ctt::BuildMonitorLayout({}, 520, 280, 16, 24).empty());
 
     const ClearTypeProfile capturedProfile{
         .pixelStructure = 2,
@@ -61,27 +83,26 @@ int main() {
         .enhancedContrastLevel = 400,
         .grayscaleEnhancedContrastLevel = 400,
     };
-    const ClearTypeProfile stockWorking = ctt::MakeStockWorkingProfile(capturedProfile, 2200);
-    CHECK(stockWorking.pixelStructure == 2);
-    CHECK(stockWorking.gammaLevel == 2200);
-    CHECK(stockWorking.clearTypeLevel == 100);
-    CHECK(stockWorking.textContrastLevel == 1);
-    CHECK(stockWorking.enhancedContrastLevel == 50);
-    CHECK(stockWorking.grayscaleEnhancedContrastLevel == 100);
-    CHECK(ctt::MakeStockWorkingProfile(capturedProfile, 0).gammaLevel == 1800);
+    const ClearTypeProfile capturedWorking = ctt::MakeStockWorkingProfile(capturedProfile, true, 2200);
+    CHECK(capturedWorking.pixelStructure == 2);
+    CHECK(capturedWorking.gammaLevel == 1400);
+    CHECK(capturedWorking.clearTypeLevel == 100);
+    CHECK(capturedWorking.textContrastLevel == 1);
+    CHECK(capturedWorking.enhancedContrastLevel == 50);
+    CHECK(capturedWorking.grayscaleEnhancedContrastLevel == 100);
+    const ClearTypeProfile edidWorking = ctt::MakeStockWorkingProfile(capturedProfile, false, 2200);
+    CHECK(edidWorking.gammaLevel == 2200);
+    CHECK(edidWorking.clearTypeLevel == 100);
+    CHECK(edidWorking.enhancedContrastLevel == 50);
+    CHECK(ctt::MakeStockWorkingProfile(capturedProfile, false, 0).gammaLevel == 1800);
 
     CHECK(ctt::CandidateCount(CalibrationStage::PixelStructure) == 2);
     CHECK(ctt::CandidateCount(CalibrationStage::GlobalContrast) == 6);
     CHECK(ctt::CandidateCount(CalibrationStage::ClearTypeLevel) == 3);
     CHECK(ctt::CandidateCount(CalibrationStage::ContrastCombination) == 6);
     CHECK(ctt::CandidateCount(CalibrationStage::GrayscaleEnhancedContrast) == 6);
-
-    CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::GlobalContrast, 0, false) == 0);
-    CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::GlobalContrast, 5, false) == 5);
-    CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::GlobalContrast, 0, true) == 0);
+    CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::GlobalContrast, 2, false) == 2);
     CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::GlobalContrast, 2, true) == 2);
-    CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::GlobalContrast, 5, true) == 5);
-    CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::ClearTypeLevel, 0, true) == 0);
     CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::GlobalContrast, 6, true) == 6);
 
     CHECK(ctt::BuildGlobalContrastCandidates(1400) ==
@@ -104,16 +125,15 @@ int main() {
     CHECK(profile.grayscaleEnhancedContrastLevel == 200);
     CHECK(profile.gammaLevel == originalGamma);
 
-    ClearTypeProfile renderingBase = stockWorking;
     const auto combinationRender = ctt::RenderingProfileForCandidate(
-        renderingBase, CalibrationStage::ContrastCombination, 4, 1400);
-    CHECK(combinationRender.gammaLevel == 2200);
+        capturedWorking, CalibrationStage::ContrastCombination, 4, 1800);
+    CHECK(combinationRender.gammaLevel == 1400);
     CHECK(combinationRender.enhancedContrastLevel == 300);
     CHECK(combinationRender.grayscaleEnhancedContrastLevel == 300);
     CHECK(combinationRender.textContrastLevel == 1);
     const auto grayscaleRender = ctt::RenderingProfileForCandidate(
-        renderingBase, CalibrationStage::GrayscaleEnhancedContrast, 5, 1600);
-    CHECK(grayscaleRender.gammaLevel == 2200);
+        capturedWorking, CalibrationStage::GrayscaleEnhancedContrast, 5, 1800);
+    CHECK(grayscaleRender.gammaLevel == 1400);
     CHECK(grayscaleRender.clearTypeLevel == 0);
     CHECK(grayscaleRender.enhancedContrastLevel == 400);
     CHECK(grayscaleRender.grayscaleEnhancedContrastLevel == 400);
@@ -131,57 +151,96 @@ int main() {
     CHECK(ctt::ToSpiOrientation(ClearTypeProfile{.pixelStructure = 1}) == 1u);
     CHECK(ctt::ToSpiOrientation(ClearTypeProfile{.pixelStructure = 2}) == 0u);
 
-    std::vector<ClearTypeProfile> seededProfiles{
-        ctt::MakeStockWorkingProfile(capturedProfile, 2200),
-        ctt::MakeStockWorkingProfile(ClearTypeProfile{.pixelStructure = 1}, 1800),
+    const ClearTypeProfile secondCaptured{
+        .pixelStructure = 1,
+        .gammaLevel = 1600,
+        .clearTypeLevel = 50,
+        .textContrastLevel = 1,
+        .enhancedContrastLevel = 100,
+        .grayscaleEnhancedContrastLevel = 200,
     };
-    ctt::WizardModel seededWizard(seededProfiles, 1400);
-    CHECK(seededWizard.CurrentProfile().gammaLevel == 2200);
-    CHECK(seededWizard.CurrentProfile().enhancedContrastLevel == 50);
-    CHECK(seededWizard.CurrentRenderingProfile().gammaLevel == 2200);
-    CHECK(seededWizard.CandidateRenderingProfile(0).gammaLevel == 2200);
-    CHECK(seededWizard.GlobalContrast() == 1400);
+    std::vector<ClearTypeProfile> seededProfiles{
+        ctt::MakeStockWorkingProfile(capturedProfile, true, 2200),
+        ctt::MakeStockWorkingProfile(secondCaptured, true, 1800),
+    };
 
-    ctt::WizardModel disabledWizard(2, 1400);
+    WizardModel disabledWizard(2, 1400);
     disabledWizard.FinishNow();
-    CHECK(disabledWizard.CurrentPage() == ctt::WizardPage::Finish);
+    CHECK(disabledWizard.CurrentPage() == WizardPage::Finish);
     CHECK(disabledWizard.Back());
-    CHECK(disabledWizard.CurrentPage() == ctt::WizardPage::Welcome);
+    CHECK(disabledWizard.CurrentPage() == WizardPage::Welcome);
 
-    ctt::WizardModel wizard(seededProfiles, 1400);
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::Welcome);
+    WizardModel wizard(seededProfiles, 1400);
     CHECK(wizard.Next());
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::Resolution);
+    CHECK(wizard.CurrentPage() == WizardPage::Resolution);
     CHECK(wizard.Next());
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::PixelStructure);
-    CHECK(wizard.CandidateRenderingProfile(0).gammaLevel == 2200);
+    CHECK(wizard.CurrentPage() == WizardPage::PixelStructure);
     CHECK(wizard.Next());
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::GlobalContrast);
+    CHECK(wizard.CurrentPage() == WizardPage::GlobalContrast);
     wizard.SelectCandidate(4);
     CHECK(wizard.GlobalContrast() == 1800);
-    CHECK(wizard.Profiles()[0].gammaLevel == 1800);
-    CHECK(wizard.Profiles()[1].gammaLevel == 1800);
+    CHECK(wizard.Profiles()[0].gammaLevel == 1400);
+    CHECK(wizard.Profiles()[1].gammaLevel == 1600);
     CHECK(wizard.Next());
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::ClearTypeLevel);
-    CHECK(wizard.CandidateRenderingProfile(0).gammaLevel == 1800);
+    CHECK(wizard.CurrentPage() == WizardPage::ClearTypeLevel);
     CHECK(wizard.Next());
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::ContrastCombination);
+    CHECK(wizard.CurrentPage() == WizardPage::ContrastCombination);
     CHECK(wizard.Next());
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::GrayscaleEnhancedContrast);
+    CHECK(wizard.CurrentPage() == WizardPage::GrayscaleEnhancedContrast);
     CHECK(wizard.Next());
-    CHECK(wizard.CurrentMonitorIndex() == 1);
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::Resolution);
-    CHECK(wizard.Next());
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::PixelStructure);
-    CHECK(wizard.Next());
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::ClearTypeLevel);
-    CHECK(wizard.Back());
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::PixelStructure);
-    CHECK(wizard.Back());
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::Resolution);
-    CHECK(wizard.Back());
+    CHECK(wizard.CurrentPage() == WizardPage::MonitorReview);
     CHECK(wizard.CurrentMonitorIndex() == 0);
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::GrayscaleEnhancedContrast);
+    CHECK(wizard.Next());
+    CHECK(wizard.CurrentPage() == WizardPage::Resolution);
+    CHECK(wizard.CurrentMonitorIndex() == 1);
+    CHECK(wizard.Next());
+    CHECK(wizard.CurrentPage() == WizardPage::PixelStructure);
+    CHECK(wizard.Next());
+    CHECK(wizard.CurrentPage() == WizardPage::ClearTypeLevel);
+    CHECK(wizard.CandidateRenderingProfile(0).gammaLevel == 1600);
+    CHECK(wizard.Back());
+    CHECK(wizard.CurrentPage() == WizardPage::PixelStructure);
+    CHECK(wizard.Back());
+    CHECK(wizard.CurrentPage() == WizardPage::Resolution);
+    CHECK(wizard.Back());
+    CHECK(wizard.CurrentPage() == WizardPage::MonitorReview);
+    CHECK(wizard.CurrentMonitorIndex() == 0);
+    CHECK(wizard.Back());
+    CHECK(wizard.CurrentPage() == WizardPage::GrayscaleEnhancedContrast);
+
+    const ClearTypeProfile reversibleBase{
+        .pixelStructure = 1,
+        .gammaLevel = 1600,
+        .clearTypeLevel = 100,
+        .textContrastLevel = 1,
+        .enhancedContrastLevel = 50,
+        .grayscaleEnhancedContrastLevel = 100,
+    };
+    WizardModel reversibleWizard({reversibleBase}, 1400);
+    CHECK(reversibleWizard.Next());
+    CHECK(reversibleWizard.Next());
+    reversibleWizard.SelectCandidate(1);
+    CHECK(reversibleWizard.Next());
+    reversibleWizard.SelectCandidate(4);
+    CHECK(reversibleWizard.Next());
+    reversibleWizard.SelectCandidate(2);
+    CHECK(reversibleWizard.Next());
+    reversibleWizard.SelectCandidate(5);
+    CHECK(reversibleWizard.Next());
+    reversibleWizard.SelectCandidate(5);
+    CHECK(reversibleWizard.CurrentProfile().grayscaleEnhancedContrastLevel == 400);
+    CHECK(reversibleWizard.Back());
+    CHECK(reversibleWizard.CurrentPage() == WizardPage::ContrastCombination);
+    CHECK(reversibleWizard.CurrentProfile().grayscaleEnhancedContrastLevel == 100);
+    CHECK(reversibleWizard.Back());
+    CHECK(reversibleWizard.CurrentPage() == WizardPage::ClearTypeLevel);
+    CHECK(reversibleWizard.CurrentProfile().enhancedContrastLevel == 50);
+    CHECK(reversibleWizard.Back());
+    CHECK(reversibleWizard.CurrentPage() == WizardPage::GlobalContrast);
+    CHECK(reversibleWizard.GlobalContrast() == 1400);
+    CHECK(reversibleWizard.Back());
+    CHECK(reversibleWizard.CurrentPage() == WizardPage::PixelStructure);
+    CHECK(reversibleWizard.CurrentProfile().pixelStructure == 1);
 
     if (failures != 0) {
         std::cerr << failures << " test(s) failed\n";

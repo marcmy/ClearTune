@@ -14,7 +14,7 @@ constexpr int kThemeComboId = 100;
 constexpr int kClearTypeCheckId = 101;
 constexpr int kTuneAllRadioId = 102;
 constexpr int kTuneOneRadioId = 103;
-constexpr int kMonitorComboId = 104;
+constexpr int kMonitorMapId = 104;
 constexpr int kCompareButtonId = 105;
 constexpr int kBackButtonId = 200;
 constexpr int kNextButtonId = IDOK;
@@ -22,6 +22,7 @@ constexpr int kCancelButtonId = IDCANCEL;
 constexpr int kSampleBaseId = 1000;
 constexpr int kFinishLightPreviewId = 1100;
 constexpr int kFinishDarkPreviewId = 1101;
+constexpr UINT_PTR kMonitorMapSubclassId = 1;
 
 constexpr COLORREF LightBackground() noexcept { return RGB(249, 249, 249); }
 constexpr COLORREF DarkBackground() noexcept { return RGB(32, 32, 32); }
@@ -101,7 +102,7 @@ bool MainWindow::CreateControls(std::wstring& error) {
     tuneOneRadio_ = CreateWindowExW(
         0,
         L"BUTTON",
-        L"Tune &one monitor:",
+        L"Tune &one monitor that I select",
         WS_CHILD | WS_TABSTOP | BS_AUTORADIOBUTTON,
         0,
         0,
@@ -111,17 +112,17 @@ bool MainWindow::CreateControls(std::wstring& error) {
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kTuneOneRadioId)),
         instance_,
         nullptr);
-    monitorCombo_ = CreateWindowExW(
+    monitorMap_ = CreateWindowExW(
         0,
-        L"COMBOBOX",
+        L"BUTTON",
         L"",
-        WS_CHILD | WS_TABSTOP | CBS_DROPDOWNLIST,
+        WS_CHILD | WS_TABSTOP | BS_OWNERDRAW,
         0,
         0,
         0,
         0,
         window_,
-        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kMonitorComboId)),
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kMonitorMapId)),
         instance_,
         nullptr);
     finishLightLabel_ = CreateWindowExW(0, L"STATIC", L"Light preview", WS_CHILD | SS_CENTER | SS_NOPREFIX, 0, 0, 0, 0, window_, nullptr, instance_, nullptr);
@@ -211,11 +212,20 @@ bool MainWindow::CreateControls(std::wstring& error) {
     if (title_ == nullptr || instruction_ == nullptr || monitorLabel_ == nullptr || themeLabel_ == nullptr ||
         themeCombo_ == nullptr || compareButton_ == nullptr || clearTypeCheck_ == nullptr ||
         clearTypeDescription_ == nullptr || tuneAllRadio_ == nullptr || tuneOneRadio_ == nullptr ||
-        monitorCombo_ == nullptr || finishLightLabel_ == nullptr || finishDarkLabel_ == nullptr ||
+        monitorMap_ == nullptr || finishLightLabel_ == nullptr || finishDarkLabel_ == nullptr ||
         finishLightPreview_ == nullptr || finishDarkPreview_ == nullptr || backButton_ == nullptr ||
         nextButton_ == nullptr || cancelButton_ == nullptr ||
         std::any_of(sampleButtons_.begin(), sampleButtons_.end(), [](HWND handle) { return handle == nullptr; })) {
         error = MakeWindowsError(L"Unable to create wizard controls", GetLastError());
+        return false;
+    }
+
+    if (SetWindowSubclass(
+            monitorMap_,
+            MonitorMapSubclassProcedure,
+            kMonitorMapSubclassId,
+            reinterpret_cast<DWORD_PTR>(this)) == FALSE) {
+        error = MakeWindowsError(L"Unable to initialize the monitor map", GetLastError());
         return false;
     }
 
@@ -226,14 +236,6 @@ bool MainWindow::CreateControls(std::wstring& error) {
     SendMessageW(clearTypeCheck_, BM_SETCHECK, clearTypeEnabled_ ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessageW(tuneAllRadio_, BM_SETCHECK, BST_CHECKED, 0);
     SendMessageW(tuneOneRadio_, BM_SETCHECK, BST_UNCHECKED, 0);
-
-    for (std::size_t index = 0; index < monitors_.size(); ++index) {
-        const std::wstring label = MonitorChoiceLabel(index);
-        SendMessageW(monitorCombo_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label.c_str()));
-    }
-    if (!monitors_.empty()) {
-        SendMessageW(monitorCombo_, CB_SETCURSEL, 0, 0);
-    }
 
     CreateFonts();
     UpdateWelcomeControls();
@@ -256,7 +258,7 @@ void MainWindow::CreateFonts() {
 
     const std::array<HWND, 21> controls{
         instruction_, monitorLabel_, themeLabel_, themeCombo_, compareButton_, clearTypeCheck_, clearTypeDescription_,
-        tuneAllRadio_, tuneOneRadio_, monitorCombo_, finishLightLabel_, finishDarkLabel_,
+        tuneAllRadio_, tuneOneRadio_, monitorMap_, finishLightLabel_, finishDarkLabel_,
         finishLightPreview_, finishDarkPreview_, backButton_, nextButton_, cancelButton_,
         sampleButtons_[0], sampleButtons_[1], sampleButtons_[2], sampleButtons_[3]};
     for (const HWND control : controls) {
@@ -295,6 +297,7 @@ void MainWindow::ApplyTheme() {
     for (const HWND button : sampleButtons_) {
         InvalidateRect(button, nullptr, TRUE);
     }
+    InvalidateRect(monitorMap_, nullptr, TRUE);
     RefreshFinishPreviews();
     UpdateCompareButton();
 }
@@ -323,11 +326,11 @@ void MainWindow::Layout() {
     MoveWindow(instruction_, margin, Scale(96), width - margin * 2, Scale(58), TRUE);
     MoveWindow(monitorLabel_, margin, Scale(154), width - margin * 2, Scale(42), TRUE);
 
-    MoveWindow(clearTypeCheck_, margin, Scale(186), Scale(250), controlHeight, TRUE);
-    MoveWindow(clearTypeDescription_, margin + Scale(24), Scale(218), width - margin * 2 - Scale(24), Scale(44), TRUE);
-    MoveWindow(tuneAllRadio_, margin, Scale(282), Scale(300), controlHeight, TRUE);
-    MoveWindow(tuneOneRadio_, margin, Scale(318), Scale(300), controlHeight, TRUE);
-    MoveWindow(monitorCombo_, margin + Scale(24), Scale(350), std::min(Scale(520), width - margin * 2 - Scale(24)), Scale(200), TRUE);
+    MoveWindow(clearTypeCheck_, margin, Scale(172), Scale(250), controlHeight, TRUE);
+    MoveWindow(clearTypeDescription_, margin + Scale(24), Scale(204), width - margin * 2 - Scale(24), Scale(38), TRUE);
+    MoveWindow(monitorMap_, margin, Scale(242), width - margin * 2, Scale(230), TRUE);
+    MoveWindow(tuneAllRadio_, margin, Scale(484), Scale(340), controlHeight, TRUE);
+    MoveWindow(tuneOneRadio_, margin, Scale(516), Scale(340), controlHeight, TRUE);
 
     const int buttonsY = height - margin - controlHeight;
     MoveWindow(cancelButton_, width - margin - buttonWidth, buttonsY, buttonWidth, controlHeight, TRUE);

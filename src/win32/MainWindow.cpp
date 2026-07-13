@@ -17,7 +17,7 @@ constexpr int kThemeComboId = 100;
 constexpr int kClearTypeCheckId = 101;
 constexpr int kTuneAllRadioId = 102;
 constexpr int kTuneOneRadioId = 103;
-constexpr int kMonitorComboId = 104;
+constexpr int kMonitorMapId = 104;
 constexpr int kCompareButtonId = 105;
 constexpr int kBackButtonId = 200;
 constexpr int kNextButtonId = IDOK;
@@ -173,6 +173,7 @@ LRESULT MainWindow::HandleMessage(const UINT message, const WPARAM wParam, const
                 SWP_NOZORDER | SWP_NOACTIVATE);
             CreateFonts();
             Layout();
+            InvalidateRect(monitorMap_, nullptr, TRUE);
             return 0;
         }
         case WM_COMMAND: {
@@ -217,6 +218,10 @@ LRESULT MainWindow::HandleMessage(const UINT message, const WPARAM wParam, const
         }
         case WM_DRAWITEM: {
             const auto* draw = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
+            if (draw->CtlID == static_cast<UINT>(kMonitorMapId)) {
+                DrawMonitorMap(*draw);
+                return TRUE;
+            }
             const UINT sampleBaseId = static_cast<UINT>(kSampleBaseId);
             if (draw->CtlID >= sampleBaseId &&
                 draw->CtlID < sampleBaseId + static_cast<UINT>(sampleButtons_.size())) {

@@ -10,6 +10,8 @@ add_library(cleartune_core
     src/core/DisplayKey.cpp
     src/core/Candidates.cpp
     src/core/Conversions.cpp
+    src/core/MonitorIdentity.cpp
+    src/core/MonitorLayout.cpp
     src/core/WizardModel.cpp
 )
 target_include_directories(cleartune_core PUBLIC src)
@@ -24,10 +26,12 @@ if(WIN32)
     add_executable(ClearTune WIN32
         src/win32/App.cpp
         src/win32/ClearTypeSettings.cpp
+        src/win32/ClearTypeSettingsAccessors.cpp
         src/win32/MainWindow.cpp
         src/win32/MainWindowControls.cpp
         src/win32/MainWindowNavigation.cpp
         src/win32/MainWindowView.cpp
+        src/win32/MonitorMapControl.cpp
         src/win32/MonitorService.cpp
         src/win32/Preferences.cpp
         src/win32/SampleRenderer.cpp
@@ -69,3 +73,17 @@ if(MSVC)
     target_compile_options(cleartune_core_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
 endif()
 add_test(NAME core COMMAND cleartune_core_tests)
+
+add_executable(cleartune_navigation_review_tests tests/NavigationReviewTests.cpp)
+target_link_libraries(cleartune_navigation_review_tests PRIVATE cleartune_core)
+if(MSVC)
+    target_compile_options(cleartune_navigation_review_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+endif()
+add_test(NAME navigation_review COMMAND cleartune_navigation_review_tests)
+
+add_executable(cleartune_final_polish_tests tests/FinalPolishTests.cpp)
+target_link_libraries(cleartune_final_polish_tests PRIVATE cleartune_core)
+if(MSVC)
+    target_compile_options(cleartune_final_polish_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+endif()
+add_test(NAME final_polish COMMAND cleartune_final_polish_tests)

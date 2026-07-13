@@ -15,10 +15,8 @@ void MainWindow::PrepareSelectedMonitors() {
         for (std::size_t index = 0; index < monitors_.size(); ++index) {
             activeMonitorIndices_.push_back(index);
         }
-    } else {
-        const LRESULT selection = SendMessageW(monitorCombo_, CB_GETCURSEL, 0, 0);
-        const std::size_t selectedIndex = selection == CB_ERR ? 0U : static_cast<std::size_t>(selection);
-        activeMonitorIndices_.push_back(std::min(selectedIndex, monitors_.size() - 1));
+    } else if (!monitors_.empty()) {
+        activeMonitorIndices_.push_back(std::min(selectedMonitorIndex_, monitors_.size() - 1U));
     }
 
     const auto& capturedProfiles = settings_.InitialProfiles();
@@ -31,7 +29,10 @@ void MainWindow::PrepareSelectedMonitors() {
             monitorIndex < monitors_.size() && monitors_[monitorIndex].gammaKnown
                 ? monitors_[monitorIndex].gammaLevel
                 : 1800;
-        profiles.push_back(MakeStockWorkingProfile(captured, monitorGamma));
+        profiles.push_back(MakeStockWorkingProfile(
+            captured,
+            settings_.InitialGammaPresent(monitorIndex),
+            monitorGamma));
     }
     model_ = WizardModel(std::move(profiles), settings_.InitialGlobalContrast());
     positionedMonitor_ = static_cast<std::size_t>(-1);
@@ -169,10 +170,7 @@ void MainWindow::ComparePolarity() {
 }
 
 void MainWindow::MonitorSelectionChanged() {
-    if (SendMessageW(tuneOneRadio_, BM_GETCHECK, 0, 0) == BST_CHECKED &&
-        SendMessageW(monitorCombo_, CB_GETCURSEL, 0, 0) == CB_ERR && !monitors_.empty()) {
-        SendMessageW(monitorCombo_, CB_SETCURSEL, 0, 0);
-    }
+    InvalidateRect(monitorMap_, nullptr, FALSE);
     UpdateWelcomeControls();
 }
 
@@ -214,9 +212,7 @@ bool MainWindow::ApplySettings(std::wstring& error) {
             skippedMonitor = true;
             continue;
         }
-        ClearTypeProfile profile = profiles[modelIndex];
-        profile.gammaLevel = model_.GlobalContrast();
-        targets.push_back(ApplyTarget{monitor.displayKey, profile, monitor.primary});
+        targets.push_back(ApplyTarget{monitor.displayKey, profiles[modelIndex], monitor.primary});
     }
     if (targets.empty()) {
         error = L"None of the monitors from this tuning session are still connected.";
