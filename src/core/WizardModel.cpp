@@ -129,9 +129,6 @@ bool WizardModel::Next() noexcept {
             page_ = currentMonitor_ == 0U ? WizardPage::GlobalContrast : WizardPage::ClearTypeLevel;
             return true;
         case WizardPage::GlobalContrast:
-            for (auto& profile : profiles_) {
-                profile.gammaLevel = globalContrast_;
-            }
             page_ = WizardPage::ClearTypeLevel;
             return true;
         case WizardPage::ClearTypeLevel:
@@ -206,9 +203,6 @@ void WizardModel::SelectCandidate(const std::size_t index) noexcept {
     }
     if (CurrentStage() == CalibrationStage::GlobalContrast) {
         globalContrast_ = globalContrastCandidates_[index];
-        for (auto& profile : profiles_) {
-            profile.gammaLevel = globalContrast_;
-        }
         return;
     }
     ApplyCandidate(CurrentProfile(), CurrentStage(), index);
