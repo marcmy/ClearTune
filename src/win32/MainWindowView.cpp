@@ -138,7 +138,7 @@ void MainWindow::RefreshPage() {
     const bool welcomePage = page == WizardPage::Welcome;
     const bool samplePage = model_.IsSamplePage();
     const bool multipleMonitors = monitors_.size() > 1;
-    if (page >= WizardPage::Resolution && page <= WizardPage::MonitorComplete) {
+    if (page >= WizardPage::Resolution && page <= WizardPage::GrayscaleEnhancedContrast) {
         MoveToCurrentMonitor();
     }
 
@@ -147,7 +147,7 @@ void MainWindow::RefreshPage() {
     SetControlVisible(tuneAllRadio_, welcomePage && multipleMonitors);
     SetControlVisible(tuneOneRadio_, welcomePage && multipleMonitors);
     SetControlVisible(monitorCombo_, welcomePage && multipleMonitors);
-    SetControlVisible(monitorLabel_, page >= WizardPage::Resolution && page <= WizardPage::MonitorComplete);
+    SetControlVisible(monitorLabel_, page >= WizardPage::Resolution && page <= WizardPage::GrayscaleEnhancedContrast);
     for (std::size_t index = 0; index < sampleButtons_.size(); ++index) {
         const bool show = samplePage && index < CandidateCount(model_.CurrentStage());
         SetControlVisible(sampleButtons_[index], show);
@@ -179,15 +179,6 @@ void MainWindow::RefreshPage() {
             SetText(instruction_, SampleInstruction());
             SetText(monitorLabel_, CurrentMonitorDescription());
             RefreshSampleButtons();
-            break;
-        case WizardPage::MonitorComplete:
-            SetText(title_, L"You have finished tuning this monitor");
-            if (model_.CurrentMonitorIndex() + 1 < model_.MonitorCount()) {
-                SetText(instruction_, L"Click Next to continue with the next selected monitor.");
-            } else {
-                SetText(instruction_, L"Click Next to review and apply the selected settings.");
-            }
-            SetText(monitorLabel_, CurrentMonitorDescription());
             break;
         case WizardPage::Finish:
             if (clearTypeEnabled_) {
