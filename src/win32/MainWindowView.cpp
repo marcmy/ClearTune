@@ -93,9 +93,6 @@ std::wstring MainWindow::SampleInstruction() const {
 }
 
 ClearTypeProfile MainWindow::FinishPreviewProfile() const noexcept {
-    // Use the exact per-monitor profile that Finish will commit. The global
-    // page-2 contrast is a separate SPI setting and must not replace Avalon
-    // GammaLevel in the final DirectWrite review.
     return model_.ReviewProfile();
 }
 
@@ -129,9 +126,13 @@ void MainWindow::RefreshPage() {
     const WizardPage page = model_.CurrentPage();
     const bool welcomePage = page == WizardPage::Welcome;
     const bool samplePage = model_.IsSamplePage();
-    const bool finishPreview = page == WizardPage::Finish && clearTypeEnabled_;
+    const bool reviewPage = page == WizardPage::MonitorReview || page == WizardPage::Finish;
+    const bool reviewPreview = reviewPage && clearTypeEnabled_;
     const bool multipleMonitors = monitors_.size() > 1;
-    if (page >= WizardPage::Resolution && page <= WizardPage::GrayscaleEnhancedContrast) {
+    const bool monitorContextPage =
+        (page >= WizardPage::Resolution && page <= WizardPage::MonitorReview) ||
+        (page == WizardPage::Finish && clearTypeEnabled_);
+    if (page >= WizardPage::Resolution && page <= WizardPage::MonitorReview) {
         MoveToCurrentMonitor();
     }
 
@@ -141,11 +142,11 @@ void MainWindow::RefreshPage() {
     SetControlVisible(tuneAllRadio_, welcomePage && multipleMonitors);
     SetControlVisible(tuneOneRadio_, welcomePage && multipleMonitors);
     SetControlVisible(monitorMap_, welcomePage && multipleMonitors);
-    SetControlVisible(monitorLabel_, page >= WizardPage::Resolution && page <= WizardPage::GrayscaleEnhancedContrast);
-    SetControlVisible(finishLightLabel_, finishPreview);
-    SetControlVisible(finishDarkLabel_, finishPreview);
-    SetControlVisible(finishLightPreview_, finishPreview);
-    SetControlVisible(finishDarkPreview_, finishPreview);
+    SetControlVisible(monitorLabel_, monitorContextPage);
+    SetControlVisible(finishLightLabel_, reviewPreview);
+    SetControlVisible(finishDarkLabel_, reviewPreview);
+    SetControlVisible(finishLightPreview_, reviewPreview);
+    SetControlVisible(finishDarkPreview_, reviewPreview);
     for (std::size_t index = 0; index < sampleButtons_.size(); ++index) {
         const bool show = samplePage && index < CandidateCount(model_.CurrentStage());
         SetControlVisible(sampleButtons_[index], show);
@@ -181,22 +182,56 @@ void MainWindow::RefreshPage() {
             SetText(monitorLabel_, CurrentMonitorDescription());
             RefreshSampleButtons();
             break;
+        case WizardPage::MonitorReview:
+            SetText(title_, L"Review this monitor's settings");
+            SetText(
+                instruction_,
+                L"The same selected profile is shown in both polarities. This preview is for the monitor named below. Click Next to continue to the next monitor.");
+            SetText(monitorLabel_, CurrentMonitorDescription());
+            RefreshFinishPreviews();
+            break;
         case WizardPage::Finish:
             if (clearTypeEnabled_) {
-                SetText(title_, model_.MonitorCount() == 1
-                    ? L"Review and save this monitor's settings"
-                    : L"Review and save your monitor settings");
-                SetText(instruction_, L"The same selected profile is shown in both polarities. Light is usually more revealing; Dark confirms that the result remains comfortable. Click Finish to save it.");
+                SetText(
+                    title_,
+                    model_.MonitorCount() == 1
+                        ? L"Review and save this monitor's settings"
+                        : L"Review the final monitor and save");
+                SetText(
+                    instruction_,
+                    model_.MonitorCount() == 1
+                        ? L"The same selected profile is shown in both polarities. Light is usually more revealing; Dark confirms that the result remains comfortable. Click Finish to save it."
+                        : L"This is the final tuned monitor. The same selected profile is shown in both polarities. Click Finish to save all monitor settings.");
+                SetText(monitorLabel_, CurrentMonitorDescription());
                 RefreshFinishPreviews();
             } else {
                 SetText(title_, L"ClearType will be turned off");
                 SetText(instruction_, L"Click Finish to turn off ClearType. Your existing per-monitor calibration values will be preserved.");
+                SetText(monitorLabel_, L"");
             }
-            SetText(monitorLabel_, L"");
             break;
     }
 
     Layout();
+    if (page == WizardPage::MonitorReview && reviewPreview) {
+        RECT client{};
+        GetClientRect(window_, &client);
+        const int width = client.right - client.left;
+        const int height = client.bottom - client.top;
+        const int margin = Scale(28);
+        const int controlHeight = Scale(26);
+        const int buttonsY = height - margin - controlHeight;
+        const int gap = Scale(14);
+        const int contentTop = Scale(205);
+        const int labelHeight = Scale(24);
+        const int previewTop = contentTop + labelHeight + Scale(6);
+        const int previewHeight = std::max(Scale(150), buttonsY - Scale(24) - previewTop);
+        const int previewWidth = (width - margin * 2 - gap) / 2;
+        MoveWindow(finishLightLabel_, margin, contentTop, previewWidth, labelHeight, TRUE);
+        MoveWindow(finishDarkLabel_, margin + previewWidth + gap, contentTop, previewWidth, labelHeight, TRUE);
+        MoveWindow(finishLightPreview_, margin, previewTop, previewWidth, previewHeight, TRUE);
+        MoveWindow(finishDarkPreview_, margin + previewWidth + gap, previewTop, previewWidth, previewHeight, TRUE);
+    }
     InvalidateRect(window_, nullptr, TRUE);
 }
 
