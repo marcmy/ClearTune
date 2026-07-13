@@ -140,8 +140,10 @@ void MainWindow::NavigateBack() {
     RefreshPage();
 }
 
-void MainWindow::SelectSample(const std::size_t index) {
-    model_.SelectCandidate(index);
+void MainWindow::SelectSample(const std::size_t visualIndex) {
+    const std::size_t candidateIndex = CandidateIndexForPolarity(
+        model_.CurrentStage(), visualIndex, IsDark());
+    model_.SelectCandidate(candidateIndex);
     RefreshSampleButtons();
 }
 
