@@ -56,8 +56,10 @@ int main() {
     const int originalGamma = profile.gammaLevel;
     ctt::ApplyCandidate(profile, CalibrationStage::PixelStructure, 1);
     CHECK(profile.pixelStructure == 2);
-    ctt::ApplyCandidate(profile, CalibrationStage::EnhancedContrast, 5);
+    ctt::ApplyCandidate(profile, CalibrationStage::EnhancedContrast, 0);
     CHECK(profile.enhancedContrastLevel == 400);
+    ctt::ApplyCandidate(profile, CalibrationStage::EnhancedContrast, 5);
+    CHECK(profile.enhancedContrastLevel == 0);
     ctt::ApplyCandidate(profile, CalibrationStage::ClearTypeLevel, 2);
     CHECK(profile.clearTypeLevel == 0);
     ctt::ApplyCandidate(profile, CalibrationStage::ContrastCombination, 5);
@@ -120,15 +122,21 @@ int main() {
     CHECK(wizard.Next());
     CHECK(wizard.CurrentPage() == ctt::WizardPage::GrayscaleEnhancedContrast);
     CHECK(wizard.Next());
-    CHECK(wizard.CurrentPage() == ctt::WizardPage::MonitorComplete);
+    CHECK(wizard.CurrentMonitorIndex() == 1);
+    CHECK(wizard.CurrentPage() == ctt::WizardPage::Resolution);
+    CHECK(wizard.Back());
+    CHECK(wizard.CurrentMonitorIndex() == 0);
+    CHECK(wizard.CurrentPage() == ctt::WizardPage::GrayscaleEnhancedContrast);
     CHECK(wizard.Next());
     CHECK(wizard.CurrentMonitorIndex() == 1);
     CHECK(wizard.CurrentPage() == ctt::WizardPage::Resolution);
-    while (!wizard.IsMonitorCompletePage()) {
+    for (int index = 0; index < 6; ++index) {
         CHECK(wizard.Next());
     }
-    CHECK(wizard.Next());
     CHECK(wizard.CurrentPage() == ctt::WizardPage::Finish);
+    CHECK(wizard.Back());
+    CHECK(wizard.CurrentMonitorIndex() == 1);
+    CHECK(wizard.CurrentPage() == ctt::WizardPage::GrayscaleEnhancedContrast);
 
     if (failures != 0) {
         std::cerr << failures << " test(s) failed\n";
