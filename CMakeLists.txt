@@ -25,6 +25,7 @@ if(WIN32)
     add_executable(ClearTune WIN32
         src/win32/App.cpp
         src/win32/ClearTypeSettings.cpp
+        src/win32/ClearTypeSettingsAccessors.cpp
         src/win32/MainWindow.cpp
         src/win32/MainWindowControls.cpp
         src/win32/MainWindowNavigation.cpp
