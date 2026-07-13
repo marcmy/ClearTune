@@ -10,6 +10,7 @@ add_library(cleartune_core
     src/core/DisplayKey.cpp
     src/core/Candidates.cpp
     src/core/Conversions.cpp
+    src/core/MonitorLayout.cpp
     src/core/WizardModel.cpp
 )
 target_include_directories(cleartune_core PUBLIC src)
