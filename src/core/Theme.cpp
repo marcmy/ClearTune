@@ -29,4 +29,11 @@ bool ResolveDarkTheme(const ThemeMode mode, const bool windowsAppsUseLightTheme)
     }
 }
 
+bool ResolvePreviewDark(
+    const ThemeMode mode,
+    const bool windowsAppsUseLightTheme,
+    const bool comparePolarity) noexcept {
+    return ResolveDarkTheme(mode, windowsAppsUseLightTheme) != comparePolarity;
+}
+
 }  // namespace ctt
