@@ -29,7 +29,10 @@ void MainWindow::PrepareSelectedMonitors() {
             monitorIndex < monitors_.size() && monitors_[monitorIndex].gammaKnown
                 ? monitors_[monitorIndex].gammaLevel
                 : 1800;
-        profiles.push_back(MakeStockWorkingProfile(captured, monitorGamma));
+        profiles.push_back(MakeStockWorkingProfile(
+            captured,
+            settings_.InitialGammaPresent(monitorIndex),
+            monitorGamma));
     }
     model_ = WizardModel(std::move(profiles), settings_.InitialGlobalContrast());
     positionedMonitor_ = static_cast<std::size_t>(-1);
@@ -209,9 +212,7 @@ bool MainWindow::ApplySettings(std::wstring& error) {
             skippedMonitor = true;
             continue;
         }
-        ClearTypeProfile profile = profiles[modelIndex];
-        profile.gammaLevel = model_.GlobalContrast();
-        targets.push_back(ApplyTarget{monitor.displayKey, profile, monitor.primary});
+        targets.push_back(ApplyTarget{monitor.displayKey, profiles[modelIndex], monitor.primary});
     }
     if (targets.empty()) {
         error = L"None of the monitors from this tuning session are still connected.";
