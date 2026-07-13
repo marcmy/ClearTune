@@ -43,30 +43,41 @@ Analyzed file fingerprints:
 
 ## Recovered stock page sequence
 
-The five calibration pages are not gamma, ClearType level, text contrast, and enhanced contrast as initially assumed. Their observable order and candidate counts are:
+The first selected monitor uses five calibration pages:
 
-| Page | Parameter | Choices |
-|---:|---|---:|
-| 1 | Pixel structure | 2 |
-| 2 | Enhanced contrast | 6 |
-| 3 | ClearType level | 3 |
-| 4 | Enhanced/text contrast combination | 6 |
-| 5 | Grayscale enhanced contrast | 6 |
+| Page | Parameter | Scope | Choices |
+|---:|---|---|---:|
+| 1 | Pixel structure | Per monitor | 2 |
+| 2 | Font-smoothing contrast / DirectWrite gamma | **Global** | 6 |
+| 3 | ClearType level | Per monitor | 3 |
+| 4 | Enhanced/text contrast combination | Per monitor | 6 |
+| 5 | Grayscale enhanced contrast | Per monitor | 6 |
 
-Gamma is retained as part of the per-monitor profile but is not presented as a user-selectable page in this build of the stock tuner.
+Stock `cttune.exe` skips page 2 for every subsequent monitor. Disassembly confirms that the selected value is stored in the global working-settings structure and applied with `SPI_SETFONTSMOOTHINGCONTRAST`, rather than as a monitor-local page choice. Repeating it for a second display would therefore be redundant and would misleadingly imply that Windows maintains a separate value for each monitor.
+
+ClearTune follows the same rule: the first monitor selected in a tuning session gets five pages, while later selected monitors get four. A single-monitor session still shows the global page once, even when the selected display is not the Windows primary monitor.
 
 ## Recovered candidate tables
 
-The values below are the observable integer parameters passed into the stock rendering pipeline and persisted in the corresponding profile fields:
+### Global contrast page
+
+The six values are generated from the contrast active when the wizard begins:
+
+- If the hundreds digit is odd: `1100, 1300, 1500, 1700, 1900, 2100`
+- Otherwise, when the current value is below `1800`: `1000, 1200, 1400, 1600, 1800, 2000`
+- Otherwise: `1200, 1400, 1600, 1800, 2000, 2200`
+
+The values are passed to DirectWrite as gamma divided by `1000` and are applied globally through `SPI_SETFONTSMOOTHINGCONTRAST`.
+
+### Per-monitor pages
 
 - Pixel structure: `1, 2`
-- Enhanced contrast: `0, 50, 100, 200, 300, 400`
 - ClearType level: `100, 50, 0`
 - Page-4 enhanced contrast: `0, 50, 100, 200, 300, 400`
 - Page-4 text contrast: `0, 0, 1, 1, 1, 2`
 - Grayscale enhanced contrast: `0, 50, 100, 200, 300, 400`
 
-Before being passed to DirectWrite, gamma is divided by `1000`, both enhanced-contrast channels are divided by `100`, and ClearType level is divided by `100`.
+Before being passed to DirectWrite, both enhanced-contrast channels are divided by `100`, and ClearType level is divided by `100`.
 
 ## Public SPI mapping
 
@@ -74,7 +85,7 @@ Before being passed to DirectWrite, gamma is divided by `1000`, both enhanced-co
 |---|---:|---:|
 | Font smoothing enabled | `SPI_GETFONTSMOOTHING` | `SPI_SETFONTSMOOTHING` |
 | Smoothing type | `SPI_GETFONTSMOOTHINGTYPE` | `SPI_SETFONTSMOOTHINGTYPE` |
-| Contrast | `SPI_GETFONTSMOOTHINGCONTRAST` | `SPI_SETFONTSMOOTHINGCONTRAST` |
+| Global contrast | `SPI_GETFONTSMOOTHINGCONTRAST` | `SPI_SETFONTSMOOTHINGCONTRAST` |
 | RGB/BGR orientation | `SPI_GETFONTSMOOTHINGORIENTATION` | `SPI_SETFONTSMOOTHINGORIENTATION` |
 
 ClearTune uses flag `0` for reversible in-session preview and `SPIF_UPDATEINIFILE | SPIF_SENDCHANGE` only for the final committed state.
@@ -83,7 +94,11 @@ ClearTune uses flag `0` for reversible in-session preview and `SPIF_UPDATEINIFIL
 
 Each card must render with independent parameters, so ClearTune follows the stock GDI-compatible DirectWrite path rather than changing the machine-wide settings once per card. It creates a bitmap render target, applies custom rendering parameters, lays out the sample text through DirectWrite, then copies the resulting bitmap into the native owner-drawn button.
 
-The selected profile is also applied to the compatible global SPI settings when advancing through the wizard. This reproduces the stock tool's page-to-page live-preview behavior while preserving independent candidate cards.
+The selected profile and global contrast are also applied to the compatible SPI settings when advancing through the wizard. This reproduces the stock tool's page-to-page live-preview behavior while preserving independent candidate cards.
+
+## Polarity comparison
+
+Light-on-dark rendering is often less revealing of weight and contrast differences than dark-on-light rendering. ClearTune does not alter or exaggerate the recovered candidate values to compensate. Instead, it preserves the stock rendering model and adds an opposite-polarity comparison plus a final dual-polarity preview. This keeps the calibration technically compatible while making dark-theme validation practical.
 
 ## Empirical follow-up
 
