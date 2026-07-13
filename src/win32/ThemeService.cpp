@@ -3,6 +3,8 @@
 #include <dwmapi.h>
 #include <uxtheme.h>
 
+#include <iterator>
+
 namespace ctt::win32 {
 namespace {
 constexpr wchar_t kPersonalizeKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
@@ -22,9 +24,8 @@ BOOL CALLBACK ThemeChildWindow(HWND child, LPARAM parameter) {
         (buttonType == BS_RADIOBUTTON || buttonType == BS_AUTORADIOBUTTON);
 
     // The undocumented dark Explorer theme paints radio-button labels black on
-    // some Windows 11 builds. Leaving those two controls unthemed lets the
-    // parent WM_CTLCOLORBTN handler provide the correct dark foreground while
-    // preserving ordinary native radio-button behavior.
+    // some Windows 11 builds. Leaving those controls unthemed lets the parent
+    // WM_CTLCOLORBTN handler provide the correct foreground and background.
     if (dark && radioButton) {
         SetWindowTheme(child, L"", L"");
     } else {
