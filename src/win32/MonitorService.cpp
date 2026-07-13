@@ -14,10 +14,11 @@
 namespace ctt::win32 {
 namespace {
 
-constexpr wchar_t kRegistryMachinePrefix[] = L"\Registry\Machine\";
-constexpr wchar_t kDisplayEnumBase[] = L"SYSTEM\CurrentControlSet\Enum\DISPLAY";
+constexpr wchar_t kRegistryMachinePrefix[] = LR"(\Registry\Machine\)";
+constexpr wchar_t kDisplayEnumBase[] = LR"(SYSTEM\CurrentControlSet\Enum\DISPLAY)";
 constexpr wchar_t kDeviceParameters[] = L"Device Parameters";
 constexpr wchar_t kEdidValue[] = L"EDID";
+constexpr wchar_t kPathSeparator = static_cast<wchar_t>(0x5C);
 constexpr std::size_t kEdidGammaOffset = 0x17;
 
 std::optional<int> GammaFromEdid(const std::vector<BYTE>& edid) noexcept {
@@ -73,11 +74,11 @@ std::optional<std::wstring> MonitorHardwareId(const wchar_t* deviceId) {
         return std::nullopt;
     }
     const std::wstring_view id{deviceId};
-    const std::size_t firstSeparator = id.find(L'\');
+    const std::size_t firstSeparator = id.find(kPathSeparator);
     if (firstSeparator == std::wstring_view::npos) {
         return std::nullopt;
     }
-    const std::size_t secondSeparator = id.find(L'\', firstSeparator + 1);
+    const std::size_t secondSeparator = id.find(kPathSeparator, firstSeparator + 1);
     const std::wstring_view hardwareId = id.substr(
         firstSeparator + 1,
         secondSeparator == std::wstring_view::npos
@@ -90,12 +91,13 @@ std::optional<std::wstring> MonitorHardwareId(const wchar_t* deviceId) {
 }
 
 std::optional<int> ReadMonitorGamma(const DISPLAY_DEVICEW& monitor) {
+    const std::wstring separator(1, kPathSeparator);
     if (monitor.DeviceKey[0] != L'\0') {
         std::wstring path{monitor.DeviceKey};
         if (path.starts_with(kRegistryMachinePrefix)) {
             path.erase(0, std::size(kRegistryMachinePrefix) - 1);
         }
-        if (const auto direct = ReadEdidGamma(HKEY_LOCAL_MACHINE, path + L"\" + kDeviceParameters)) {
+        if (const auto direct = ReadEdidGamma(HKEY_LOCAL_MACHINE, path + separator + kDeviceParameters)) {
             return direct;
         }
         if (const auto direct = ReadEdidGamma(HKEY_LOCAL_MACHINE, path)) {
@@ -107,7 +109,7 @@ std::optional<int> ReadMonitorGamma(const DISPLAY_DEVICEW& monitor) {
     if (!hardwareId) {
         return std::nullopt;
     }
-    const std::wstring hardwarePath = std::wstring{kDisplayEnumBase} + L"\" + *hardwareId;
+    const std::wstring hardwarePath = std::wstring{kDisplayEnumBase} + separator + *hardwareId;
     HKEY hardwareKey = nullptr;
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, hardwarePath.c_str(), 0, KEY_ENUMERATE_SUB_KEYS, &hardwareKey) != ERROR_SUCCESS) {
         return std::nullopt;
@@ -133,7 +135,7 @@ std::optional<int> ReadMonitorGamma(const DISPLAY_DEVICEW& monitor) {
             continue;
         }
         const std::wstring parametersPath =
-            hardwarePath + L"\" + std::wstring{instanceName.data(), nameLength} + L"\" + kDeviceParameters;
+            hardwarePath + separator + std::wstring{instanceName.data(), nameLength} + separator + kDeviceParameters;
         result = ReadEdidGamma(HKEY_LOCAL_MACHINE, parametersPath);
     }
     RegCloseKey(hardwareKey);
