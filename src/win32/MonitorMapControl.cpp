@@ -126,8 +126,9 @@ void MainWindow::RebuildMonitorMapLayout() {
         inputs,
         client.right - client.left,
         client.bottom - client.top,
-        Scale(12),
-        Scale(24));
+        Scale(18),
+        Scale(24),
+        Scale(12));
 }
 
 std::optional<std::size_t> MainWindow::MonitorMapHitTest(const int x, const int y) const noexcept {
@@ -215,7 +216,7 @@ void MainWindow::DrawMonitorMap(const DRAWITEMSTRUCT& draw) {
         }
 
         RECT outlineRect = ToRect(item.selectionRect);
-        InflateRect(&outlineRect, Scale(2), Scale(2));
+        InflateRect(&outlineRect, Scale(4), Scale(4));
         const bool selected = tuneOne && index == selectedMonitorIndex_;
         const bool hovered = hoveredMonitorIndex_ && *hoveredMonitorIndex_ == index;
         if (selected) {
