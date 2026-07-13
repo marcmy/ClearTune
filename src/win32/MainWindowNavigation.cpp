@@ -21,11 +21,17 @@ void MainWindow::PrepareSelectedMonitors() {
         activeMonitorIndices_.push_back(std::min(selectedIndex, monitors_.size() - 1));
     }
 
-    const auto& initialProfiles = settings_.InitialProfiles();
+    const auto& capturedProfiles = settings_.InitialProfiles();
     std::vector<ClearTypeProfile> profiles;
     profiles.reserve(activeMonitorIndices_.size());
     for (const std::size_t monitorIndex : activeMonitorIndices_) {
-        profiles.push_back(monitorIndex < initialProfiles.size() ? initialProfiles[monitorIndex] : ClearTypeProfile{});
+        const ClearTypeProfile captured =
+            monitorIndex < capturedProfiles.size() ? capturedProfiles[monitorIndex] : ClearTypeProfile{};
+        const int monitorGamma =
+            monitorIndex < monitors_.size() && monitors_[monitorIndex].gammaKnown
+                ? monitors_[monitorIndex].gammaLevel
+                : 1800;
+        profiles.push_back(MakeStockWorkingProfile(captured, monitorGamma));
     }
     model_ = WizardModel(std::move(profiles), settings_.InitialGlobalContrast());
     positionedMonitor_ = static_cast<std::size_t>(-1);
