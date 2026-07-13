@@ -220,11 +220,13 @@ LRESULT MainWindow::HandleMessage(const UINT message, const WPARAM wParam, const
             const UINT sampleBaseId = static_cast<UINT>(kSampleBaseId);
             if (draw->CtlID >= sampleBaseId &&
                 draw->CtlID < sampleBaseId + static_cast<UINT>(sampleButtons_.size())) {
-                const std::size_t index = static_cast<std::size_t>(draw->CtlID - sampleBaseId);
-                if (model_.IsSamplePage() && index < CandidateCount(model_.CurrentStage())) {
-                    const ClearTypeProfile profile = model_.CandidateRenderingProfile(index);
+                const std::size_t visualIndex = static_cast<std::size_t>(draw->CtlID - sampleBaseId);
+                if (model_.IsSamplePage() && visualIndex < CandidateCount(model_.CurrentStage())) {
+                    const std::size_t candidateIndex = CandidateIndexForPolarity(
+                        model_.CurrentStage(), visualIndex, IsDark());
+                    const ClearTypeProfile profile = model_.CandidateRenderingProfile(candidateIndex);
                     std::wstring error;
-                    const bool selected = index == model_.SelectedCandidateIndex();
+                    const bool selected = candidateIndex == model_.SelectedCandidateIndex();
                     const bool focused = (draw->itemState & ODS_FOCUS) != 0;
                     if (!renderer_.DrawSample(
                             draw->hDC,
