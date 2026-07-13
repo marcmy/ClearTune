@@ -8,11 +8,25 @@ Windows' built-in ClearType tuner presents dark text on a light background. Clea
 
 > **Project status:** early alpha. The portable core and Windows x64 builds are tested in GitHub Actions; real-monitor visual validation is still required before publishing a release.
 
+## Recommended workflow
+
+Light text on a dark surface is visually more forgiving, so differences between valid ClearType settings can be much subtler there. ClearTune therefore recommends:
+
+1. Use **Light** polarity to identify the clearest sample.
+2. Use **Compare Dark** to verify that the same selection remains comfortable and does not show distracting glow or color fringing.
+3. Review the selected profile in both polarities on the Finish screen before saving it.
+
+The Compare control never changes the saved theme preference or the current selection.
+
 ## What it does
 
 - Native C++20 and Win32; no .NET or third-party runtime.
-- Uses the recovered stock five-stage sequence with **2, 6, 3, 6, and 6** choices.
+- Reproduces the stock first-monitor sequence with **2, 6, 3, 6, and 6** choices.
+- Correctly treats stock stage 2 as the global Windows font-smoothing contrast setting.
+- Shows that global stage once per tuning session and skips it on subsequent monitors, matching `cttune.exe`.
 - Three-state **System / Light / Dark** selector.
+- One-click opposite-polarity comparison without changing the remembered theme.
+- Final side-by-side Light and Dark previews of the selected profile.
 - `System` follows the Windows app theme. A manual Light or Dark choice is remembered until changed.
 - Light mode renders dark text on a near-white surface.
 - Dark mode renders light text on the standard near-black Windows app surface.
