@@ -7,7 +7,8 @@
 namespace ctt {
 namespace {
 constexpr std::array<int, 2> kPixelStructure{1, 2};
-constexpr std::array<int, 6> kEnhancedContrast{0, 50, 100, 200, 300, 400};
+// Stock cttune displays page 2 from strongest to weakest contrast.
+constexpr std::array<int, 6> kEnhancedContrast{400, 300, 200, 100, 50, 0};
 constexpr std::array<int, 3> kClearTypeLevel{100, 50, 0};
 constexpr std::array<int, 6> kCombinationEnhancedContrast{0, 50, 100, 200, 300, 400};
 constexpr std::array<int, 6> kCombinationTextContrast{0, 0, 1, 1, 1, 2};
