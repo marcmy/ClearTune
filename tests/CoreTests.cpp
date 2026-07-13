@@ -235,6 +235,60 @@ int main() {
     CHECK(wizard.CurrentMonitorIndex() == 0);
     CHECK(wizard.CurrentPage() == ctt::WizardPage::GrayscaleEnhancedContrast);
 
+    const ClearTypeProfile reversibleBase{
+        .pixelStructure = 1,
+        .gammaLevel = 1600,
+        .clearTypeLevel = 100,
+        .textContrastLevel = 1,
+        .enhancedContrastLevel = 50,
+        .grayscaleEnhancedContrastLevel = 100,
+    };
+    ctt::WizardModel reversibleWizard({reversibleBase}, 1400);
+    CHECK(reversibleWizard.Next());
+    CHECK(reversibleWizard.Next());
+    CHECK(reversibleWizard.CurrentPage() == ctt::WizardPage::PixelStructure);
+    reversibleWizard.SelectCandidate(1);
+    CHECK(reversibleWizard.Next());
+    CHECK(reversibleWizard.CurrentPage() == ctt::WizardPage::GlobalContrast);
+    reversibleWizard.SelectCandidate(4);
+    CHECK(reversibleWizard.Next());
+    CHECK(reversibleWizard.CurrentPage() == ctt::WizardPage::ClearTypeLevel);
+    reversibleWizard.SelectCandidate(2);
+    CHECK(reversibleWizard.Next());
+    CHECK(reversibleWizard.CurrentPage() == ctt::WizardPage::ContrastCombination);
+    reversibleWizard.SelectCandidate(5);
+    CHECK(reversibleWizard.Next());
+    CHECK(reversibleWizard.CurrentPage() == ctt::WizardPage::GrayscaleEnhancedContrast);
+    reversibleWizard.SelectCandidate(5);
+    CHECK(reversibleWizard.CurrentProfile().grayscaleEnhancedContrastLevel == 400);
+
+    CHECK(reversibleWizard.Back());
+    CHECK(reversibleWizard.CurrentPage() == ctt::WizardPage::ContrastCombination);
+    CHECK(reversibleWizard.CurrentProfile().pixelStructure == 2);
+    CHECK(reversibleWizard.GlobalContrast() == 1800);
+    CHECK(reversibleWizard.CurrentProfile().clearTypeLevel == 0);
+    CHECK(reversibleWizard.CurrentProfile().textContrastLevel == 1);
+    CHECK(reversibleWizard.CurrentProfile().enhancedContrastLevel == 50);
+    CHECK(reversibleWizard.CurrentProfile().grayscaleEnhancedContrastLevel == 100);
+
+    CHECK(reversibleWizard.Back());
+    CHECK(reversibleWizard.CurrentPage() == ctt::WizardPage::ClearTypeLevel);
+    CHECK(reversibleWizard.CurrentProfile().pixelStructure == 2);
+    CHECK(reversibleWizard.GlobalContrast() == 1800);
+    CHECK(reversibleWizard.CurrentProfile().clearTypeLevel == 100);
+    CHECK(reversibleWizard.CurrentProfile().enhancedContrastLevel == 50);
+
+    CHECK(reversibleWizard.Back());
+    CHECK(reversibleWizard.CurrentPage() == ctt::WizardPage::GlobalContrast);
+    CHECK(reversibleWizard.CurrentProfile().pixelStructure == 2);
+    CHECK(reversibleWizard.GlobalContrast() == 1400);
+    CHECK(reversibleWizard.CurrentProfile().clearTypeLevel == 100);
+
+    CHECK(reversibleWizard.Back());
+    CHECK(reversibleWizard.CurrentPage() == ctt::WizardPage::PixelStructure);
+    CHECK(reversibleWizard.CurrentProfile().pixelStructure == 1);
+    CHECK(reversibleWizard.GlobalContrast() == 1400);
+
     if (failures != 0) {
         std::cerr << failures << " test(s) failed\n";
         return EXIT_FAILURE;
