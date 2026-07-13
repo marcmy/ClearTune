@@ -5,24 +5,6 @@
 #include <algorithm>
 
 namespace ctt::win32 {
-namespace {
-int SamplePageNumber(const WizardPage page) noexcept {
-    switch (page) {
-        case WizardPage::PixelStructure:
-            return 1;
-        case WizardPage::EnhancedContrast:
-            return 2;
-        case WizardPage::ClearTypeLevel:
-            return 3;
-        case WizardPage::ContrastCombination:
-            return 4;
-        case WizardPage::GrayscaleEnhancedContrast:
-            return 5;
-        default:
-            return 0;
-    }
-}
-}
 
 void MainWindow::UpdateWelcomeControls() {
     const bool allowMonitorSelection = clearTypeEnabled_ && monitors_.size() > 1;
@@ -30,6 +12,18 @@ void MainWindow::UpdateWelcomeControls() {
     EnableWindow(tuneAllRadio_, allowMonitorSelection ? TRUE : FALSE);
     EnableWindow(tuneOneRadio_, allowMonitorSelection ? TRUE : FALSE);
     EnableWindow(monitorCombo_, allowMonitorSelection && tuneOne ? TRUE : FALSE);
+}
+
+void MainWindow::UpdateCompareButton() {
+    if (compareButton_ == nullptr) {
+        return;
+    }
+    const bool baseDark = IsBaseDark();
+    if (comparePolarity_) {
+        SetWindowTextW(compareButton_, baseDark ? L"Return to Dark" : L"Return to Light");
+    } else {
+        SetWindowTextW(compareButton_, baseDark ? L"Compare Light" : L"Compare Dark");
+    }
 }
 
 const MonitorDescriptor* MainWindow::CurrentMonitor() const noexcept {
@@ -101,10 +95,25 @@ std::wstring MainWindow::ResolutionWarningText() const {
 }
 
 std::wstring MainWindow::SampleInstruction() const {
-    const int page = SamplePageNumber(model_.CurrentPage());
     std::wstring text = L"Sample ";
-    text.append(std::to_wstring(page)).append(L" of 5.");
+    text.append(std::to_wstring(model_.CurrentSampleNumber()));
+    text.append(L" of ").append(std::to_wstring(model_.CurrentSampleCount())).append(L". ");
+    if (IsDark()) {
+        text.append(L"Dark polarity is more forgiving, so differences may be subtle. Compare Light to choose the clearest sample, then return to Dark to check comfort, glow, and color fringing.");
+    } else {
+        text.append(L"Light polarity usually makes differences easiest to see. Choose the clearest sample, then Compare Dark to verify that it remains comfortable without glow or color fringing.");
+    }
     return text;
+}
+
+ClearTypeProfile MainWindow::FinishPreviewProfile() const noexcept {
+    ClearTypeProfile profile;
+    const auto& profiles = model_.Profiles();
+    if (!profiles.empty()) {
+        profile = profiles.back();
+    }
+    profile.gammaLevel = model_.GlobalContrast();
+    return profile;
 }
 
 void MainWindow::MoveToCurrentMonitor() {
@@ -137,17 +146,23 @@ void MainWindow::RefreshPage() {
     const WizardPage page = model_.CurrentPage();
     const bool welcomePage = page == WizardPage::Welcome;
     const bool samplePage = model_.IsSamplePage();
+    const bool finishPreview = page == WizardPage::Finish && clearTypeEnabled_;
     const bool multipleMonitors = monitors_.size() > 1;
     if (page >= WizardPage::Resolution && page <= WizardPage::GrayscaleEnhancedContrast) {
         MoveToCurrentMonitor();
     }
 
+    SetControlVisible(compareButton_, samplePage);
     SetControlVisible(clearTypeCheck_, welcomePage);
     SetControlVisible(clearTypeDescription_, welcomePage);
     SetControlVisible(tuneAllRadio_, welcomePage && multipleMonitors);
     SetControlVisible(tuneOneRadio_, welcomePage && multipleMonitors);
     SetControlVisible(monitorCombo_, welcomePage && multipleMonitors);
     SetControlVisible(monitorLabel_, page >= WizardPage::Resolution && page <= WizardPage::GrayscaleEnhancedContrast);
+    SetControlVisible(finishLightLabel_, finishPreview);
+    SetControlVisible(finishDarkLabel_, finishPreview);
+    SetControlVisible(finishLightPreview_, finishPreview);
+    SetControlVisible(finishDarkPreview_, finishPreview);
     for (std::size_t index = 0; index < sampleButtons_.size(); ++index) {
         const bool show = samplePage && index < CandidateCount(model_.CurrentStage());
         SetControlVisible(sampleButtons_[index], show);
@@ -155,13 +170,14 @@ void MainWindow::RefreshPage() {
 
     EnableWindow(backButton_, page != WizardPage::Welcome);
     SetWindowTextW(nextButton_, page == WizardPage::Finish ? L"&Finish" : L"&Next >");
+    UpdateCompareButton();
 
     switch (page) {
         case WizardPage::Welcome:
             SetText(title_, L"Make the text on your screen easier to read");
-            SetText(instruction_, multipleMonitors
-                ? L"Choose whether to tune every active monitor or just one. Settings are previewed while you work and restored if you cancel."
-                : L"Settings are previewed while you work and restored if you cancel.");
+            SetText(
+                instruction_,
+                L"Recommended: use Light mode to identify the clearest setting, then switch to Dark to verify comfort and check for glow or color fringing. Your selections are preserved when the theme changes.");
             SetText(monitorLabel_, L"");
             UpdateWelcomeControls();
             break;
@@ -171,7 +187,7 @@ void MainWindow::RefreshPage() {
             SetText(monitorLabel_, CurrentMonitorDescription());
             break;
         case WizardPage::PixelStructure:
-        case WizardPage::EnhancedContrast:
+        case WizardPage::GlobalContrast:
         case WizardPage::ClearTypeLevel:
         case WizardPage::ContrastCombination:
         case WizardPage::GrayscaleEnhancedContrast:
@@ -183,9 +199,10 @@ void MainWindow::RefreshPage() {
         case WizardPage::Finish:
             if (clearTypeEnabled_) {
                 SetText(title_, model_.MonitorCount() == 1
-                    ? L"You have finished tuning this monitor"
-                    : L"You have finished tuning your monitors");
-                SetText(instruction_, L"Click Finish to save the selected settings. Cancel or Back will restore the configuration from before ClearTune started.");
+                    ? L"Review and save this monitor's settings"
+                    : L"Review and save your monitor settings");
+                SetText(instruction_, L"The same selected profile is shown in both polarities. Light is usually more revealing; Dark confirms that the result remains comfortable. Click Finish to save it.");
+                RefreshFinishPreviews();
             } else {
                 SetText(title_, L"ClearType will be turned off");
                 SetText(instruction_, L"Click Finish to turn off ClearType. Your existing per-monitor calibration values will be preserved.");
@@ -201,6 +218,15 @@ void MainWindow::RefreshPage() {
 void MainWindow::RefreshSampleButtons() {
     for (const HWND button : sampleButtons_) {
         InvalidateRect(button, nullptr, TRUE);
+    }
+}
+
+void MainWindow::RefreshFinishPreviews() {
+    if (finishLightPreview_ != nullptr) {
+        InvalidateRect(finishLightPreview_, nullptr, TRUE);
+    }
+    if (finishDarkPreview_ != nullptr) {
+        InvalidateRect(finishDarkPreview_, nullptr, TRUE);
     }
 }
 
