@@ -16,7 +16,6 @@ enum class WizardPage {
     ClearTypeLevel,
     ContrastCombination,
     GrayscaleEnhancedContrast,
-    MonitorComplete,
     Finish,
 };
 
@@ -28,7 +27,6 @@ public:
     [[nodiscard]] WizardPage CurrentPage() const noexcept;
     [[nodiscard]] std::size_t CurrentMonitorIndex() const noexcept;
     [[nodiscard]] std::size_t MonitorCount() const noexcept;
-    [[nodiscard]] bool IsMonitorCompletePage() const noexcept;
     [[nodiscard]] bool IsSamplePage() const noexcept;
     [[nodiscard]] CalibrationStage CurrentStage() const noexcept;
     [[nodiscard]] std::size_t SelectedCandidateIndex() const noexcept;
