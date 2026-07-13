@@ -47,13 +47,16 @@ private:
     void RefreshPage();
     void MoveToCurrentMonitor();
     void RefreshSampleButtons();
+    void RefreshFinishPreviews();
     void UpdateWelcomeControls();
+    void UpdateCompareButton();
     void SetControlVisible(HWND control, bool visible) const noexcept;
     void SetText(HWND control, const std::wstring& text) const noexcept;
     void NavigateNext();
     void NavigateBack();
     void SelectSample(std::size_t index);
     void ThemeSelectionChanged();
+    void ComparePolarity();
     void MonitorSelectionChanged();
     void PrepareSelectedMonitors();
     void SkipUnneededResolutionPage(bool movingForward);
@@ -66,6 +69,8 @@ private:
     [[nodiscard]] std::wstring ResolutionWarningText() const;
     [[nodiscard]] std::wstring MonitorChoiceLabel(std::size_t monitorIndex) const;
     [[nodiscard]] std::wstring SampleInstruction() const;
+    [[nodiscard]] ClearTypeProfile FinishPreviewProfile() const noexcept;
+    [[nodiscard]] bool IsBaseDark() const noexcept;
     [[nodiscard]] bool IsDark() const noexcept;
     [[nodiscard]] int Scale(int value) const noexcept;
 
@@ -76,11 +81,16 @@ private:
     HWND monitorLabel_{};
     HWND themeLabel_{};
     HWND themeCombo_{};
+    HWND compareButton_{};
     HWND clearTypeCheck_{};
     HWND clearTypeDescription_{};
     HWND tuneAllRadio_{};
     HWND tuneOneRadio_{};
     HWND monitorCombo_{};
+    HWND finishLightLabel_{};
+    HWND finishDarkLabel_{};
+    HWND finishLightPreview_{};
+    HWND finishDarkPreview_{};
     HWND backButton_{};
     HWND nextButton_{};
     HWND cancelButton_{};
@@ -96,6 +106,7 @@ private:
     ClearTypeSettingsSession& settings_;
     WizardModel model_;
     ThemeMode themeMode_{ThemeMode::System};
+    bool comparePolarity_{false};
     bool clearTypeEnabled_{true};
     bool settingsCommitted_{false};
     bool closing_{false};
