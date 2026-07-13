@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/MonitorLayout.h"
 #include "core/Theme.h"
 #include "core/WizardModel.h"
 #include "win32/ClearTypeSettings.h"
@@ -13,6 +14,7 @@
 
 #include <array>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -35,6 +37,13 @@ public:
 
 private:
     static LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
+    static LRESULT CALLBACK MonitorMapSubclassProcedure(
+        HWND window,
+        UINT message,
+        WPARAM wParam,
+        LPARAM lParam,
+        UINT_PTR subclassId,
+        DWORD_PTR referenceData);
     LRESULT HandleMessage(UINT message, WPARAM wParam, LPARAM lParam);
 
     [[nodiscard]] bool RegisterWindowClass(std::wstring& error);
@@ -61,13 +70,18 @@ private:
     void PrepareSelectedMonitors();
     void SkipUnneededResolutionPage(bool movingForward);
     void CancelAndClose();
+    void DrawMonitorMap(const DRAWITEMSTRUCT& draw);
+    void RebuildMonitorMapLayout();
+    void SelectMonitorFromMap(std::size_t index);
+    void MoveMonitorMapSelection(int direction);
+    void SetTuneOneMonitor(bool enabled);
+    [[nodiscard]] std::optional<std::size_t> MonitorMapHitTest(int x, int y) const noexcept;
     [[nodiscard]] bool PreviewCurrentProfile(std::wstring& error);
     [[nodiscard]] bool ApplySettings(std::wstring& error);
     [[nodiscard]] const MonitorDescriptor* CurrentMonitor() const noexcept;
     [[nodiscard]] bool CurrentMonitorNeedsWarning() const noexcept;
     [[nodiscard]] std::wstring CurrentMonitorDescription() const;
     [[nodiscard]] std::wstring ResolutionWarningText() const;
-    [[nodiscard]] std::wstring MonitorChoiceLabel(std::size_t monitorIndex) const;
     [[nodiscard]] std::wstring SampleInstruction() const;
     [[nodiscard]] ClearTypeProfile FinishPreviewProfile() const noexcept;
     [[nodiscard]] bool IsBaseDark() const noexcept;
@@ -86,7 +100,7 @@ private:
     HWND clearTypeDescription_{};
     HWND tuneAllRadio_{};
     HWND tuneOneRadio_{};
-    HWND monitorCombo_{};
+    HWND monitorMap_{};
     HWND finishLightLabel_{};
     HWND finishDarkLabel_{};
     HWND finishLightPreview_{};
@@ -103,6 +117,9 @@ private:
 
     std::vector<MonitorDescriptor> monitors_;
     std::vector<std::size_t> activeMonitorIndices_;
+    std::vector<MonitorLayoutItem> monitorMapLayout_;
+    std::optional<std::size_t> hoveredMonitorIndex_;
+    std::size_t selectedMonitorIndex_{0};
     ClearTypeSettingsSession& settings_;
     WizardModel model_;
     ThemeMode themeMode_{ThemeMode::System};
@@ -110,6 +127,7 @@ private:
     bool clearTypeEnabled_{true};
     bool settingsCommitted_{false};
     bool closing_{false};
+    bool monitorMapTracking_{false};
     std::size_t positionedMonitor_{static_cast<std::size_t>(-1)};
     SampleRenderer renderer_;
 };
