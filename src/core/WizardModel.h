@@ -40,18 +40,32 @@ public:
     [[nodiscard]] int GlobalContrast() const noexcept;
     [[nodiscard]] const ContrastCandidates& GlobalContrastCandidates() const noexcept;
 
-    bool Next() noexcept;
-    void FinishNow() noexcept;
-    bool Back() noexcept;
+    bool Next();
+    void FinishNow();
+    bool Back();
     void SelectCandidate(std::size_t index) noexcept;
 
 private:
+    struct StateSnapshot {
+        std::vector<ClearTypeProfile> profiles;
+        std::size_t currentMonitor{};
+        WizardPage page{WizardPage::Welcome};
+        int globalContrast{1400};
+        bool finishedFromWelcome{};
+    };
+
+    [[nodiscard]] StateSnapshot CaptureState() const;
+    void RestoreState(StateSnapshot snapshot) noexcept;
+    bool AdvancePage() noexcept;
+
     std::vector<ClearTypeProfile> profiles_;
     std::size_t currentMonitor_{0};
     WizardPage page_{WizardPage::Welcome};
     int globalContrast_{1400};
     ContrastCandidates globalContrastCandidates_{};
     bool finishedFromWelcome_{false};
+    StateSnapshot pageEntryState_{};
+    std::vector<StateSnapshot> history_;
 };
 
 }  // namespace ctt
