@@ -18,10 +18,13 @@ constexpr int kClearTypeCheckId = 101;
 constexpr int kTuneAllRadioId = 102;
 constexpr int kTuneOneRadioId = 103;
 constexpr int kMonitorComboId = 104;
+constexpr int kCompareButtonId = 105;
 constexpr int kBackButtonId = 200;
 constexpr int kNextButtonId = IDOK;
 constexpr int kCancelButtonId = IDCANCEL;
 constexpr int kSampleBaseId = 1000;
+constexpr int kFinishLightPreviewId = 1100;
+constexpr int kFinishDarkPreviewId = 1101;
 constexpr wchar_t kSampleText[] =
     L"The Quick Brown Fox Jumps Over the Lazy Dog. Lorem ipsum dolor sit amet, consectetuer adipiscing elit. "
     L"Mauris ornare odio vel risus. Maecenas elit metus, pellentesque quis, pretium.\n\n"
@@ -42,7 +45,7 @@ MainWindow::MainWindow(
     : instance_(instance),
       monitors_(std::move(monitors)),
       settings_(settings),
-      model_(settings.InitialProfiles()),
+      model_(settings.InitialProfiles(), settings.InitialGlobalContrast()),
       themeMode_(themeMode),
       clearTypeEnabled_(settings.InitialClearTypeEnabled()) {
     activeMonitorIndices_.reserve(monitors_.size());
@@ -179,6 +182,10 @@ LRESULT MainWindow::HandleMessage(const UINT message, const WPARAM wParam, const
                 ThemeSelectionChanged();
                 return 0;
             }
+            if (identifier == kCompareButtonId && notification == BN_CLICKED) {
+                ComparePolarity();
+                return 0;
+            }
             if (identifier == kClearTypeCheckId && notification == BN_CLICKED) {
                 clearTypeEnabled_ = SendMessageW(clearTypeCheck_, BM_GETCHECK, 0, 0) == BST_CHECKED;
                 UpdateWelcomeControls();
@@ -215,8 +222,7 @@ LRESULT MainWindow::HandleMessage(const UINT message, const WPARAM wParam, const
                 draw->CtlID < sampleBaseId + static_cast<UINT>(sampleButtons_.size())) {
                 const std::size_t index = static_cast<std::size_t>(draw->CtlID - sampleBaseId);
                 if (model_.IsSamplePage() && index < CandidateCount(model_.CurrentStage())) {
-                    const ClearTypeProfile profile = RenderingProfileForCandidate(
-                        model_.CurrentProfile(), model_.CurrentStage(), index);
+                    const ClearTypeProfile profile = model_.CandidateRenderingProfile(index);
                     std::wstring error;
                     const bool selected = index == model_.SelectedCandidateIndex();
                     const bool focused = (draw->itemState & ODS_FOCUS) != 0;
@@ -243,6 +249,25 @@ LRESULT MainWindow::HandleMessage(const UINT message, const WPARAM wParam, const
                     }
                     return TRUE;
                 }
+            }
+            if (draw->CtlID == static_cast<UINT>(kFinishLightPreviewId) ||
+                draw->CtlID == static_cast<UINT>(kFinishDarkPreviewId)) {
+                std::wstring error;
+                const bool dark = draw->CtlID == static_cast<UINT>(kFinishDarkPreviewId);
+                const bool focused = (draw->itemState & ODS_FOCUS) != 0;
+                const ClearTypeProfile profile = FinishPreviewProfile();
+                renderer_.DrawSample(
+                    draw->hDC,
+                    draw->rcItem,
+                    profile,
+                    CalibrationStage::PixelStructure,
+                    dpi_,
+                    dark,
+                    false,
+                    focused,
+                    kSampleText,
+                    error);
+                return TRUE;
             }
             break;
         }
@@ -284,8 +309,12 @@ LRESULT MainWindow::HandleMessage(const UINT message, const WPARAM wParam, const
     return DefWindowProcW(window_, message, wParam, lParam);
 }
 
-bool MainWindow::IsDark() const noexcept {
+bool MainWindow::IsBaseDark() const noexcept {
     return IsDarkTheme(themeMode_);
+}
+
+bool MainWindow::IsDark() const noexcept {
+    return ResolvePreviewDark(themeMode_, WindowsAppsUseLightTheme(), comparePolarity_);
 }
 
 }  // namespace ctt::win32
