@@ -91,14 +91,19 @@ int main() {
         .grayscaleEnhancedContrastLevel = 400,
     };
     const ClearTypeProfile capturedWorking = ctt::MakeStockWorkingProfile(capturedProfile, true, 2200);
-    CHECK(capturedWorking == capturedProfile);
+    CHECK(capturedWorking.pixelStructure == 2);
+    CHECK(capturedWorking.gammaLevel == 1400);
+    CHECK(capturedWorking.clearTypeLevel == 100);
+    CHECK(capturedWorking.textContrastLevel == 1);
+    CHECK(capturedWorking.enhancedContrastLevel == 50);
+    CHECK(capturedWorking.grayscaleEnhancedContrastLevel == 100);
     const ClearTypeProfile edidWorking = ctt::MakeStockWorkingProfile(capturedProfile, false, 2200);
     CHECK(edidWorking.pixelStructure == 2);
     CHECK(edidWorking.gammaLevel == 2200);
-    CHECK(edidWorking.clearTypeLevel == 0);
-    CHECK(edidWorking.textContrastLevel == 6);
-    CHECK(edidWorking.enhancedContrastLevel == 400);
-    CHECK(edidWorking.grayscaleEnhancedContrastLevel == 400);
+    CHECK(edidWorking.clearTypeLevel == 100);
+    CHECK(edidWorking.textContrastLevel == 1);
+    CHECK(edidWorking.enhancedContrastLevel == 50);
+    CHECK(edidWorking.grayscaleEnhancedContrastLevel == 100);
     CHECK(ctt::MakeStockWorkingProfile(capturedProfile, false, 0).gammaLevel == 1800);
 
     CHECK(ctt::CandidateCount(CalibrationStage::PixelStructure) == 2);
@@ -176,7 +181,7 @@ int main() {
     };
     ctt::WizardModel seededWizard(seededProfiles, 1400);
     CHECK(seededWizard.CurrentProfile().gammaLevel == 1400);
-    CHECK(seededWizard.CurrentProfile().enhancedContrastLevel == 400);
+    CHECK(seededWizard.CurrentProfile().enhancedContrastLevel == 50);
     CHECK(seededWizard.CurrentRenderingProfile().gammaLevel == 1400);
     CHECK(seededWizard.CandidateRenderingProfile(0).gammaLevel == 1400);
     CHECK(seededWizard.GlobalContrast() == 1400);
@@ -196,6 +201,12 @@ int main() {
     CHECK(wizard.CandidateRenderingProfile(0).gammaLevel == 1400);
     CHECK(wizard.Next());
     CHECK(wizard.CurrentPage() == ctt::WizardPage::GlobalContrast);
+    const ClearTypeProfile globalCard = wizard.CandidateRenderingProfile(4);
+    CHECK(globalCard.gammaLevel == 1800);
+    CHECK(globalCard.clearTypeLevel == 100);
+    CHECK(globalCard.textContrastLevel == 1);
+    CHECK(globalCard.enhancedContrastLevel == 50);
+    CHECK(globalCard.grayscaleEnhancedContrastLevel == 100);
     wizard.SelectCandidate(4);
     CHECK(wizard.GlobalContrast() == 1800);
     CHECK(wizard.Profiles()[0].gammaLevel == 1400);
