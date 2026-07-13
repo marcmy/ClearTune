@@ -14,7 +14,8 @@ Light text on a dark surface is visually more forgiving, so differences between 
 
 1. Use **Light** polarity to identify the clearest sample.
 2. Use **Compare Dark** to verify that the same selection remains comfortable and does not show distracting glow or color fringing.
-3. Review the selected profile in both polarities on the Finish screen before saving it.
+3. When tuning multiple displays, review each monitor's selected profile in both polarities before continuing.
+4. Review the final monitor once more before saving the complete session.
 
 The Compare control never changes the saved theme preference or the current selection.
 
@@ -26,12 +27,15 @@ The Compare control never changes the saved theme preference or the current sele
 - Shows that global stage once per tuning session and skips it on subsequent monitors, matching `cttune.exe`.
 - Three-state **System / Light / Dark** selector.
 - One-click opposite-polarity comparison without changing the remembered theme.
-- Final side-by-side Light and Dark previews of the selected profile.
+- Side-by-side Light and Dark review after each monitor when tuning multiple displays.
+- Final side-by-side Light and Dark preview of the exact profile that will be saved for the final monitor.
 - `System` follows the Windows app theme. A manual Light or Dark choice is remembered until changed.
 - Light mode renders dark text on a near-white surface.
 - Dark mode renders light text on the standard near-black Windows app surface.
 - Tunes all active monitors or one selected monitor.
 - Shows the real relative monitor arrangement, including portrait displays and negative desktop coordinates.
+- Uses the monitor's EDID/DisplayConfig model name when Windows exposes it, rather than settling for `Generic PnP Monitor`.
+- Adds subtle spacing between monitor tiles and breathing room around hover and selection outlines.
 - Supports mouse hover, click selection, and keyboard arrows in the monitor map.
 - Clicking a monitor automatically switches from all-monitor tuning to single-monitor tuning.
 - Skips the display-setup page when a landscape monitor is already using an acceptable resolution.
@@ -90,7 +94,7 @@ build\Release\ClearTune.exe
 
 ### Portable core tests
 
-The non-Windows model, candidate, theme, conversion, monitor-layout, and wizard logic can also be tested with Ninja:
+The non-Windows model, candidate, theme, conversion, monitor-identity, monitor-layout, and wizard logic can also be tested with Ninja:
 
 ```bash
 cmake -S . -B build -G Ninja
