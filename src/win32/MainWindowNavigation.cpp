@@ -15,10 +15,8 @@ void MainWindow::PrepareSelectedMonitors() {
         for (std::size_t index = 0; index < monitors_.size(); ++index) {
             activeMonitorIndices_.push_back(index);
         }
-    } else {
-        const LRESULT selection = SendMessageW(monitorCombo_, CB_GETCURSEL, 0, 0);
-        const std::size_t selectedIndex = selection == CB_ERR ? 0U : static_cast<std::size_t>(selection);
-        activeMonitorIndices_.push_back(std::min(selectedIndex, monitors_.size() - 1));
+    } else if (!monitors_.empty()) {
+        activeMonitorIndices_.push_back(std::min(selectedMonitorIndex_, monitors_.size() - 1U));
     }
 
     const auto& capturedProfiles = settings_.InitialProfiles();
@@ -169,10 +167,7 @@ void MainWindow::ComparePolarity() {
 }
 
 void MainWindow::MonitorSelectionChanged() {
-    if (SendMessageW(tuneOneRadio_, BM_GETCHECK, 0, 0) == BST_CHECKED &&
-        SendMessageW(monitorCombo_, CB_GETCURSEL, 0, 0) == CB_ERR && !monitors_.empty()) {
-        SendMessageW(monitorCombo_, CB_SETCURSEL, 0, 0);
-    }
+    InvalidateRect(monitorMap_, nullptr, FALSE);
     UpdateWelcomeControls();
 }
 
