@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   release:
-    if: github.repository == 'marcmy/ClearTune' && github.event.head_commit.message == 'release: publish v0.1.0'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
