@@ -11,7 +11,8 @@ std::vector<MonitorLayoutItem> BuildMonitorLayout(
     const int canvasWidth,
     const int canvasHeight,
     const int padding,
-    const int labelHeight) noexcept {
+    const int labelHeight,
+    const int monitorGap) noexcept {
     std::vector<MonitorLayoutItem> result;
     if (monitors.empty() || canvasWidth <= 0 || canvasHeight <= 0) {
         return result;
@@ -36,6 +37,7 @@ std::vector<MonitorLayoutItem> BuildMonitorLayout(
 
     const int safePadding = std::max(0, padding);
     const int safeLabelHeight = std::max(0, labelHeight);
+    const int safeMonitorGap = std::max(0, monitorGap);
     const int desktopWidth = std::max(1, maximumRight - minimumLeft);
     const int desktopHeight = std::max(1, maximumBottom - minimumTop);
     const int availableWidth = std::max(1, canvasWidth - safePadding * 2);
@@ -58,18 +60,32 @@ std::vector<MonitorLayoutItem> BuildMonitorLayout(
             continue;
         }
 
-        const int left = originX + static_cast<int>(std::lround(
+        int left = originX + static_cast<int>(std::lround(
             static_cast<double>(monitor.left - minimumLeft) * scale));
-        const int top = originY + static_cast<int>(std::lround(
+        int top = originY + static_cast<int>(std::lround(
             static_cast<double>(monitor.top - minimumTop) * scale));
-        const int right = left + std::max(1, static_cast<int>(std::lround(
+        int right = left + std::max(1, static_cast<int>(std::lround(
             static_cast<double>(monitor.width) * scale)));
-        const int bottom = top + std::max(1, static_cast<int>(std::lround(
+        int bottom = top + std::max(1, static_cast<int>(std::lround(
             static_cast<double>(monitor.height) * scale)));
 
+        const int horizontalInset = std::min(safeMonitorGap / 2, std::max(0, (right - left - 2) / 2));
+        const int verticalInset = std::min(safeMonitorGap / 2, std::max(0, (bottom - top - 2) / 2));
+        left += horizontalInset;
+        right -= safeMonitorGap - horizontalInset;
+        top += verticalInset;
+        bottom -= safeMonitorGap - verticalInset;
+
+        if (right <= left) {
+            right = left + 1;
+        }
+        if (bottom <= top) {
+            bottom = top + 1;
+        }
+
         const LayoutRect monitorRect{
-            .left = left,
-            .top = top,
+            .left = std::max(safePadding, left),
+            .top = std::max(safePadding + safeLabelHeight, top),
             .right = std::min(canvasWidth - safePadding, right),
             .bottom = std::min(canvasHeight - safePadding, bottom),
         };
