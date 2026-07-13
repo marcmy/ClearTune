@@ -10,7 +10,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-The core suite covers theme and comparison-polarity resolution, persisted theme values, display-key normalization, CRU-style preferred-resolution handling, monitor-map scaling and hit testing, recovered global-contrast candidate generation, per-monitor candidate mappings, and multi-monitor wizard navigation.
+The core suite covers theme and comparison-polarity resolution, persisted theme values, display-key normalization, CRU-style preferred-resolution handling, monitor-map scaling and hit testing, recovered global-contrast candidate generation, per-monitor candidate mappings, transactional Back/Next rollback, and multi-monitor wizard navigation.
 
 ### Windows build
 
@@ -42,15 +42,17 @@ The Windows application target compiling cleanly is also a header/API smoke test
 16. Use Compare Light/Dark and confirm it changes polarity without changing the saved theme choice or candidate selection.
 17. Confirm the instructional copy identifies Light as the more revealing tuning polarity and Dark as verification.
 18. Advance through pages while watching another ClearType-rendered window; confirm compatible global settings preview as pages advance.
-19. Press Back to the opening page and confirm the launch-time global settings are restored.
-20. Cancel from several different pages and compare the baseline snapshot: the final state must match the launch snapshot.
-21. On Finish, confirm the same selected profile is visible in side-by-side Light and Dark previews.
-22. With two monitors, confirm the wizard moves to the monitor named on the page.
-23. Verify both all-monitor and single-monitor calibration.
-24. Verify landscape and portrait monitors.
-25. Finish a session and confirm the selected per-display values and global contrast are written.
-26. Disconnect a secondary monitor before Finish and confirm it is skipped with a warning.
-27. Force a registry write failure in a disposable test account and verify the baseline is restored.
-28. Run the stock ClearType tuner afterward and confirm it can read and supersede the settings normally.
+19. On pages 3, 4, and 5, choose obvious non-default samples, then press Back repeatedly and confirm each Back removes the choice committed by the corresponding Next.
+20. Return from page 5 to page 2 and confirm page 2 uses its original stock baseline rather than inheriting page-4 or page-5 contrast values.
+21. Press Back to the opening page and confirm the launch-time global settings are restored.
+22. Cancel from several different pages and compare the baseline snapshot: the final state must match the launch snapshot.
+23. On Finish, confirm the same selected profile is visible in side-by-side Light and Dark previews.
+24. With two monitors, confirm the wizard moves to the monitor named on the page.
+25. Verify both all-monitor and single-monitor calibration.
+26. Verify landscape and portrait monitors.
+27. Finish a session and confirm the selected per-display values and global contrast are written.
+28. Disconnect a secondary monitor before Finish and confirm it is skipped with a warning.
+29. Force a registry write failure in a disposable test account and verify the baseline is restored.
+30. Run the stock ClearType tuner afterward and confirm it can read and supersede the settings normally.
 
 Do not publish a release solely from a Linux portable-core build. A Windows MSVC build and manual display test are required.
