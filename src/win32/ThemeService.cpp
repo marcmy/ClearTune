@@ -12,7 +12,24 @@ constexpr DWORD kImmersiveDarkModeBefore20H1 = 19;
 
 BOOL CALLBACK ThemeChildWindow(HWND child, LPARAM parameter) {
     const bool dark = parameter != 0;
-    SetWindowTheme(child, dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);
+
+    wchar_t className[32]{};
+    GetClassNameW(child, className, static_cast<int>(std::size(className)));
+    const DWORD style = static_cast<DWORD>(GetWindowLongPtrW(child, GWL_STYLE));
+    const DWORD buttonType = style & BS_TYPEMASK;
+    const bool radioButton =
+        lstrcmpiW(className, L"Button") == 0 &&
+        (buttonType == BS_RADIOBUTTON || buttonType == BS_AUTORADIOBUTTON);
+
+    // The undocumented dark Explorer theme paints radio-button labels black on
+    // some Windows 11 builds. Leaving those two controls unthemed lets the
+    // parent WM_CTLCOLORBTN handler provide the correct dark foreground while
+    // preserving ordinary native radio-button behavior.
+    if (dark && radioButton) {
+        SetWindowTheme(child, L"", L"");
+    } else {
+        SetWindowTheme(child, dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);
+    }
     return TRUE;
 }
 }
