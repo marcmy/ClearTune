@@ -93,13 +93,10 @@ std::wstring MainWindow::SampleInstruction() const {
 }
 
 ClearTypeProfile MainWindow::FinishPreviewProfile() const noexcept {
-    ClearTypeProfile profile;
-    const auto& profiles = model_.Profiles();
-    if (!profiles.empty()) {
-        profile = profiles.back();
-    }
-    profile.gammaLevel = model_.GlobalContrast();
-    return profile;
+    // Use the exact per-monitor profile that Finish will commit. The global
+    // page-2 contrast is a separate SPI setting and must not replace Avalon
+    // GammaLevel in the final DirectWrite review.
+    return model_.ReviewProfile();
 }
 
 void MainWindow::MoveToCurrentMonitor() {
