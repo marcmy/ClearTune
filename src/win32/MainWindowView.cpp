@@ -8,10 +8,10 @@ namespace ctt::win32 {
 
 void MainWindow::UpdateWelcomeControls() {
     const bool allowMonitorSelection = clearTypeEnabled_ && monitors_.size() > 1;
-    const bool tuneOne = SendMessageW(tuneOneRadio_, BM_GETCHECK, 0, 0) == BST_CHECKED;
     EnableWindow(tuneAllRadio_, allowMonitorSelection ? TRUE : FALSE);
     EnableWindow(tuneOneRadio_, allowMonitorSelection ? TRUE : FALSE);
-    EnableWindow(monitorCombo_, allowMonitorSelection && tuneOne ? TRUE : FALSE);
+    EnableWindow(monitorMap_, allowMonitorSelection ? TRUE : FALSE);
+    InvalidateRect(monitorMap_, nullptr, FALSE);
 }
 
 void MainWindow::UpdateCompareButton() {
@@ -42,20 +42,6 @@ bool MainWindow::CurrentMonitorNeedsWarning() const noexcept {
     const MonitorDescriptor* monitor = CurrentMonitor();
     return monitor != nullptr &&
         (monitor->portrait || (monitor->nativeResolutionKnown && !monitor->atNativeResolution));
-}
-
-std::wstring MainWindow::MonitorChoiceLabel(const std::size_t monitorIndex) const {
-    if (monitorIndex >= monitors_.size()) {
-        return {};
-    }
-    const auto& monitor = monitors_[monitorIndex];
-    std::wstring label = L"Display ";
-    label.append(std::to_wstring(monitorIndex + 1)).append(L": ").append(monitor.friendlyName);
-    label.append(L" — ").append(std::to_wstring(monitor.width)).append(L" × ").append(std::to_wstring(monitor.height));
-    if (monitor.primary) {
-        label.append(L" — primary");
-    }
-    return label;
 }
 
 std::wstring MainWindow::CurrentMonitorDescription() const {
@@ -157,7 +143,7 @@ void MainWindow::RefreshPage() {
     SetControlVisible(clearTypeDescription_, welcomePage);
     SetControlVisible(tuneAllRadio_, welcomePage && multipleMonitors);
     SetControlVisible(tuneOneRadio_, welcomePage && multipleMonitors);
-    SetControlVisible(monitorCombo_, welcomePage && multipleMonitors);
+    SetControlVisible(monitorMap_, welcomePage && multipleMonitors);
     SetControlVisible(monitorLabel_, page >= WizardPage::Resolution && page <= WizardPage::GrayscaleEnhancedContrast);
     SetControlVisible(finishLightLabel_, finishPreview);
     SetControlVisible(finishDarkLabel_, finishPreview);
@@ -177,7 +163,9 @@ void MainWindow::RefreshPage() {
             SetText(title_, L"Make the text on your screen easier to read");
             SetText(
                 instruction_,
-                L"Recommended: use Light mode to identify the clearest setting, then switch to Dark to verify comfort and check for glow or color fringing. Your selections are preserved when the theme changes.");
+                multipleMonitors
+                    ? L"Choose all monitors, or click one in the arrangement below. For calibration, Light is usually most revealing and Dark is useful for verification."
+                    : L"Recommended: use Light mode to identify the clearest setting, then switch to Dark to verify comfort and check for glow or color fringing.");
             SetText(monitorLabel_, L"");
             UpdateWelcomeControls();
             break;
