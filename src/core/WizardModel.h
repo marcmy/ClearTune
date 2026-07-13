@@ -34,6 +34,7 @@ public:
     [[nodiscard]] std::size_t SelectedCandidateIndex() const noexcept;
     [[nodiscard]] const ClearTypeProfile& CurrentProfile() const noexcept;
     [[nodiscard]] ClearTypeProfile& CurrentProfile() noexcept;
+    [[nodiscard]] const ClearTypeProfile& ReviewProfile() const noexcept;
     [[nodiscard]] ClearTypeProfile CurrentRenderingProfile() const noexcept;
     [[nodiscard]] ClearTypeProfile CandidateRenderingProfile(std::size_t index) const noexcept;
     [[nodiscard]] const std::vector<ClearTypeProfile>& Profiles() const noexcept;
