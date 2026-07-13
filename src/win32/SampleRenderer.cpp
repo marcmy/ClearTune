@@ -178,10 +178,10 @@ bool SampleRenderer::Initialize(std::wstring& error) {
         return false;
     }
 
-    // The stock binary passes 11.0 directly to DirectWrite. CreateTextFormat
-    // expects device-independent pixels, not typographic points; converting it
-    // again made ClearTune's samples roughly one-third larger and more forgiving.
-    constexpr FLOAT kSampleFontSize = 11.0F;
+    // Match the effective stock sample size: 11 typographic points converted
+    // to DirectWrite device-independent pixels. The previous 11-DIP experiment
+    // was visibly far too small at 100% scaling.
+    constexpr FLOAT kSampleFontSize = 11.0F * 96.0F / 72.0F;
     result = writeFactory_->CreateTextFormat(
         L"Calibri",
         nullptr,
