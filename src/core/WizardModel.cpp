@@ -1,50 +1,37 @@
 #include "core/WizardModel.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <utility>
 
 namespace ctt {
 namespace {
-constexpr WizardPage NextPageWithinMonitor(const WizardPage page) noexcept {
-    switch (page) {
-        case WizardPage::Resolution:
-            return WizardPage::PixelStructure;
-        case WizardPage::PixelStructure:
-            return WizardPage::EnhancedContrast;
-        case WizardPage::EnhancedContrast:
-            return WizardPage::ClearTypeLevel;
-        case WizardPage::ClearTypeLevel:
-            return WizardPage::ContrastCombination;
-        case WizardPage::ContrastCombination:
-            return WizardPage::GrayscaleEnhancedContrast;
-        default:
-            return page;
+
+template <std::size_t Size>
+std::size_t NearestIndex(const std::array<int, Size>& values, const int value) noexcept {
+    std::size_t bestIndex = 0;
+    int bestDistance = std::abs(values.front() - value);
+    for (std::size_t index = 1; index < values.size(); ++index) {
+        const int distance = std::abs(values[index] - value);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestIndex = index;
+        }
     }
+    return bestIndex;
 }
 
-constexpr WizardPage PreviousPageWithinMonitor(const WizardPage page) noexcept {
-    switch (page) {
-        case WizardPage::GrayscaleEnhancedContrast:
-            return WizardPage::ContrastCombination;
-        case WizardPage::ContrastCombination:
-            return WizardPage::ClearTypeLevel;
-        case WizardPage::ClearTypeLevel:
-            return WizardPage::EnhancedContrast;
-        case WizardPage::EnhancedContrast:
-            return WizardPage::PixelStructure;
-        case WizardPage::PixelStructure:
-            return WizardPage::Resolution;
-        default:
-            return page;
-    }
-}
-}
+}  // namespace
 
-WizardModel::WizardModel(const std::size_t monitorCount)
-    : profiles_(std::max<std::size_t>(monitorCount, 1U)) {}
+WizardModel::WizardModel(const std::size_t monitorCount, const int globalContrast)
+    : profiles_(std::max<std::size_t>(monitorCount, 1U)),
+      globalContrast_(std::clamp(globalContrast, 1000, 2200)),
+      globalContrastCandidates_(BuildGlobalContrastCandidates(globalContrast_)) {}
 
-WizardModel::WizardModel(std::vector<ClearTypeProfile> profiles)
-    : profiles_(std::move(profiles)) {
+WizardModel::WizardModel(std::vector<ClearTypeProfile> profiles, const int globalContrast)
+    : profiles_(std::move(profiles)),
+      globalContrast_(std::clamp(globalContrast, 1000, 2200)),
+      globalContrastCandidates_(BuildGlobalContrastCandidates(globalContrast_)) {
     if (profiles_.empty()) {
         profiles_.emplace_back();
     }
@@ -62,8 +49,8 @@ CalibrationStage WizardModel::CurrentStage() const noexcept {
     switch (page_) {
         case WizardPage::PixelStructure:
             return CalibrationStage::PixelStructure;
-        case WizardPage::EnhancedContrast:
-            return CalibrationStage::EnhancedContrast;
+        case WizardPage::GlobalContrast:
+            return CalibrationStage::GlobalContrast;
         case WizardPage::ClearTypeLevel:
             return CalibrationStage::ClearTypeLevel;
         case WizardPage::ContrastCombination:
@@ -74,16 +61,64 @@ CalibrationStage WizardModel::CurrentStage() const noexcept {
     }
 }
 
+std::size_t WizardModel::CurrentSampleCount() const noexcept {
+    return currentMonitor_ == 0U ? 5U : 4U;
+}
+
+std::size_t WizardModel::CurrentSampleNumber() const noexcept {
+    switch (page_) {
+        case WizardPage::PixelStructure:
+            return 1U;
+        case WizardPage::GlobalContrast:
+            return 2U;
+        case WizardPage::ClearTypeLevel:
+            return currentMonitor_ == 0U ? 3U : 2U;
+        case WizardPage::ContrastCombination:
+            return currentMonitor_ == 0U ? 4U : 3U;
+        case WizardPage::GrayscaleEnhancedContrast:
+            return currentMonitor_ == 0U ? 5U : 4U;
+        default:
+            return 0U;
+    }
+}
+
 std::size_t WizardModel::SelectedCandidateIndex() const noexcept {
     if (!IsSamplePage()) {
         return 0;
+    }
+    if (CurrentStage() == CalibrationStage::GlobalContrast) {
+        return NearestIndex(globalContrastCandidates_, globalContrast_);
     }
     return NearestCandidateIndex(CurrentStage(), CurrentProfile());
 }
 
 const ClearTypeProfile& WizardModel::CurrentProfile() const noexcept { return profiles_[currentMonitor_]; }
 ClearTypeProfile& WizardModel::CurrentProfile() noexcept { return profiles_[currentMonitor_]; }
+
+ClearTypeProfile WizardModel::CurrentRenderingProfile() const noexcept {
+    ClearTypeProfile profile = CurrentProfile();
+    profile.gammaLevel = globalContrast_;
+    return profile;
+}
+
+ClearTypeProfile WizardModel::CandidateRenderingProfile(const std::size_t index) const noexcept {
+    if (CurrentStage() == CalibrationStage::GlobalContrast) {
+        ClearTypeProfile profile = CurrentProfile();
+        if (index < globalContrastCandidates_.size()) {
+            profile.gammaLevel = globalContrastCandidates_[index];
+        } else {
+            profile.gammaLevel = globalContrast_;
+        }
+        return profile;
+    }
+    return RenderingProfileForCandidate(CurrentProfile(), CurrentStage(), index, globalContrast_);
+}
+
 const std::vector<ClearTypeProfile>& WizardModel::Profiles() const noexcept { return profiles_; }
+int WizardModel::GlobalContrast() const noexcept { return globalContrast_; }
+const ContrastCandidates& WizardModel::GlobalContrastCandidates() const noexcept {
+    return globalContrastCandidates_;
+}
 
 bool WizardModel::Next() noexcept {
     finishedFromWelcome_ = false;
@@ -92,11 +127,19 @@ bool WizardModel::Next() noexcept {
             page_ = WizardPage::Resolution;
             return true;
         case WizardPage::Resolution:
+            page_ = WizardPage::PixelStructure;
+            return true;
         case WizardPage::PixelStructure:
-        case WizardPage::EnhancedContrast:
+            page_ = currentMonitor_ == 0U ? WizardPage::GlobalContrast : WizardPage::ClearTypeLevel;
+            return true;
+        case WizardPage::GlobalContrast:
+            page_ = WizardPage::ClearTypeLevel;
+            return true;
         case WizardPage::ClearTypeLevel:
+            page_ = WizardPage::ContrastCombination;
+            return true;
         case WizardPage::ContrastCombination:
-            page_ = NextPageWithinMonitor(page_);
+            page_ = WizardPage::GrayscaleEnhancedContrast;
             return true;
         case WizardPage::GrayscaleEnhancedContrast:
             if (currentMonitor_ + 1U < profiles_.size()) {
@@ -131,11 +174,19 @@ bool WizardModel::Back() noexcept {
             }
             return true;
         case WizardPage::PixelStructure:
-        case WizardPage::EnhancedContrast:
+            page_ = WizardPage::Resolution;
+            return true;
+        case WizardPage::GlobalContrast:
+            page_ = WizardPage::PixelStructure;
+            return true;
         case WizardPage::ClearTypeLevel:
+            page_ = currentMonitor_ == 0U ? WizardPage::GlobalContrast : WizardPage::PixelStructure;
+            return true;
         case WizardPage::ContrastCombination:
+            page_ = WizardPage::ClearTypeLevel;
+            return true;
         case WizardPage::GrayscaleEnhancedContrast:
-            page_ = PreviousPageWithinMonitor(page_);
+            page_ = WizardPage::ContrastCombination;
             return true;
         case WizardPage::Finish:
             if (finishedFromWelcome_) {
@@ -151,9 +202,14 @@ bool WizardModel::Back() noexcept {
 }
 
 void WizardModel::SelectCandidate(const std::size_t index) noexcept {
-    if (IsSamplePage()) {
-        ApplyCandidate(CurrentProfile(), CurrentStage(), index);
+    if (!IsSamplePage() || index >= CandidateCount(CurrentStage())) {
+        return;
     }
+    if (CurrentStage() == CalibrationStage::GlobalContrast) {
+        globalContrast_ = globalContrastCandidates_[index];
+        return;
+    }
+    ApplyCandidate(CurrentProfile(), CurrentStage(), index);
 }
 
 }  // namespace ctt
