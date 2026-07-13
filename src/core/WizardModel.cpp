@@ -26,7 +26,9 @@ std::size_t NearestIndex(const std::array<int, Size>& values, const int value) n
 WizardModel::WizardModel(const std::size_t monitorCount, const int globalContrast)
     : profiles_(std::max<std::size_t>(monitorCount, 1U)),
       globalContrast_(std::clamp(globalContrast, 1000, 2200)),
-      globalContrastCandidates_(BuildGlobalContrastCandidates(globalContrast_)) {}
+      globalContrastCandidates_(BuildGlobalContrastCandidates(globalContrast_)) {
+    pageEntryState_ = CaptureState();
+}
 
 WizardModel::WizardModel(std::vector<ClearTypeProfile> profiles, const int globalContrast)
     : profiles_(std::move(profiles)),
@@ -35,6 +37,7 @@ WizardModel::WizardModel(std::vector<ClearTypeProfile> profiles, const int globa
     if (profiles_.empty()) {
         profiles_.emplace_back();
     }
+    pageEntryState_ = CaptureState();
 }
 
 WizardPage WizardModel::CurrentPage() const noexcept { return page_; }
@@ -116,7 +119,25 @@ const ContrastCandidates& WizardModel::GlobalContrastCandidates() const noexcept
     return globalContrastCandidates_;
 }
 
-bool WizardModel::Next() noexcept {
+WizardModel::StateSnapshot WizardModel::CaptureState() const {
+    return StateSnapshot{
+        .profiles = profiles_,
+        .currentMonitor = currentMonitor_,
+        .page = page_,
+        .globalContrast = globalContrast_,
+        .finishedFromWelcome = finishedFromWelcome_,
+    };
+}
+
+void WizardModel::RestoreState(StateSnapshot snapshot) noexcept {
+    profiles_ = std::move(snapshot.profiles);
+    currentMonitor_ = snapshot.currentMonitor;
+    page_ = snapshot.page;
+    globalContrast_ = snapshot.globalContrast;
+    finishedFromWelcome_ = snapshot.finishedFromWelcome;
+}
+
+bool WizardModel::AdvancePage() noexcept {
     finishedFromWelcome_ = false;
     switch (page_) {
         case WizardPage::Welcome:
@@ -151,50 +172,38 @@ bool WizardModel::Next() noexcept {
     return false;
 }
 
-void WizardModel::FinishNow() noexcept {
+bool WizardModel::Next() {
+    if (page_ == WizardPage::Finish) {
+        return false;
+    }
+
+    history_.push_back(pageEntryState_);
+    if (!AdvancePage()) {
+        history_.pop_back();
+        return false;
+    }
+    pageEntryState_ = CaptureState();
+    return true;
+}
+
+void WizardModel::FinishNow() {
+    history_.push_back(pageEntryState_);
     currentMonitor_ = 0;
     page_ = WizardPage::Finish;
     finishedFromWelcome_ = true;
+    pageEntryState_ = CaptureState();
 }
 
-bool WizardModel::Back() noexcept {
-    switch (page_) {
-        case WizardPage::Welcome:
-            return false;
-        case WizardPage::Resolution:
-            if (currentMonitor_ == 0U) {
-                page_ = WizardPage::Welcome;
-            } else {
-                --currentMonitor_;
-                page_ = WizardPage::GrayscaleEnhancedContrast;
-            }
-            return true;
-        case WizardPage::PixelStructure:
-            page_ = WizardPage::Resolution;
-            return true;
-        case WizardPage::GlobalContrast:
-            page_ = WizardPage::PixelStructure;
-            return true;
-        case WizardPage::ClearTypeLevel:
-            page_ = currentMonitor_ == 0U ? WizardPage::GlobalContrast : WizardPage::PixelStructure;
-            return true;
-        case WizardPage::ContrastCombination:
-            page_ = WizardPage::ClearTypeLevel;
-            return true;
-        case WizardPage::GrayscaleEnhancedContrast:
-            page_ = WizardPage::ContrastCombination;
-            return true;
-        case WizardPage::Finish:
-            if (finishedFromWelcome_) {
-                page_ = WizardPage::Welcome;
-                finishedFromWelcome_ = false;
-            } else {
-                currentMonitor_ = profiles_.size() - 1U;
-                page_ = WizardPage::GrayscaleEnhancedContrast;
-            }
-            return true;
+bool WizardModel::Back() {
+    if (history_.empty()) {
+        return false;
     }
-    return false;
+
+    StateSnapshot previous = std::move(history_.back());
+    history_.pop_back();
+    RestoreState(std::move(previous));
+    pageEntryState_ = CaptureState();
+    return true;
 }
 
 void WizardModel::SelectCandidate(const std::size_t index) noexcept {
