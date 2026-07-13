@@ -4,7 +4,7 @@
 
 ClearTune is a clean-room, native C++/Win32 ClearType calibration wizard with genuine light and dark sample polarity.
 
-Windows' built-in ClearType tuner presents dark text on a light background. ClearTune keeps the same uncomplicated **choose the clearest sample** flow, but lets the calibration surface use **System**, **Light**, or **Dark** mode. You can tune every active monitor or select a single display.
+Windows' built-in ClearType tuner presents dark text on a light background. ClearTune keeps the same uncomplicated **choose the clearest sample** flow, but lets the calibration surface use **System**, **Light**, or **Dark** mode. You can tune every active monitor or select a single display from an interactive map of the real Windows display arrangement.
 
 > **Project status:** early alpha. The portable core and Windows x64 builds are tested in GitHub Actions; real-monitor visual validation is still required before publishing a release.
 
@@ -31,6 +31,9 @@ The Compare control never changes the saved theme preference or the current sele
 - Light mode renders dark text on a near-white surface.
 - Dark mode renders light text on the standard near-black Windows app surface.
 - Tunes all active monitors or one selected monitor.
+- Shows the real relative monitor arrangement, including portrait displays and negative desktop coordinates.
+- Supports mouse hover, click selection, and keyboard arrows in the monitor map.
+- Clicking a monitor automatically switches from all-monitor tuning to single-monitor tuning.
 - Skips the display-setup page when a landscape monitor is already using an acceptable resolution.
 - Shows a warning only for portrait orientation or a known reduced resolution.
 - Uses the stock-style DirectWrite bitmap-render-target path and Calibri 11-point samples.
@@ -86,7 +89,7 @@ build\Release\ClearTune.exe
 
 ### Portable core tests
 
-The non-Windows model, candidate, theme, conversion, and wizard logic can also be tested with Ninja:
+The non-Windows model, candidate, theme, conversion, monitor-layout, and wizard logic can also be tested with Ninja:
 
 ```bash
 cmake -S . -B build -G Ninja
