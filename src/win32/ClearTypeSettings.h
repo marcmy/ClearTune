@@ -45,19 +45,29 @@ struct ApplyTarget {
 class ClearTypeSettingsSession {
 public:
     [[nodiscard]] bool Capture(std::span<const std::wstring> displayKeys, std::wstring& error);
-    [[nodiscard]] bool Preview(const ClearTypeProfile& profile, bool enableClearType, std::wstring& error);
+    [[nodiscard]] bool Preview(
+        const ClearTypeProfile& profile,
+        bool enableClearType,
+        int globalContrast,
+        std::wstring& error);
     [[nodiscard]] bool RestorePreview(std::wstring& error);
-    [[nodiscard]] bool Apply(std::span<const ApplyTarget> targets, bool enableClearType, std::wstring& error);
+    [[nodiscard]] bool Apply(
+        std::span<const ApplyTarget> targets,
+        bool enableClearType,
+        int globalContrast,
+        std::wstring& error);
     [[nodiscard]] bool Restore(std::wstring& error);
 
     [[nodiscard]] const std::vector<ClearTypeProfile>& InitialProfiles() const noexcept;
     [[nodiscard]] bool InitialClearTypeEnabled() const noexcept;
+    [[nodiscard]] int InitialGlobalContrast() const noexcept;
 
 private:
     [[nodiscard]] bool CaptureGlobal(std::wstring& error);
     [[nodiscard]] bool ApplyGlobal(
         const ClearTypeProfile& primaryProfile,
         bool enableClearType,
+        int globalContrast,
         UINT flags,
         std::wstring& error);
     [[nodiscard]] bool RestoreGlobal(UINT flags, std::wstring& error);
