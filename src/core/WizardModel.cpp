@@ -97,6 +97,7 @@ std::size_t WizardModel::SelectedCandidateIndex() const noexcept {
 
 const ClearTypeProfile& WizardModel::CurrentProfile() const noexcept { return profiles_[currentMonitor_]; }
 ClearTypeProfile& WizardModel::CurrentProfile() noexcept { return profiles_[currentMonitor_]; }
+const ClearTypeProfile& WizardModel::ReviewProfile() const noexcept { return profiles_[currentMonitor_]; }
 
 ClearTypeProfile WizardModel::CurrentRenderingProfile() const noexcept {
     return CurrentProfile();
