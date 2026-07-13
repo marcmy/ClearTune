@@ -53,6 +53,25 @@ std::size_t CandidateCount(const CalibrationStage stage) noexcept {
     }
 }
 
+std::size_t CandidateIndexForPolarity(
+    const CalibrationStage stage,
+    const std::size_t visualIndex,
+    const bool dark) noexcept {
+    const std::size_t count = CandidateCount(stage);
+    if (visualIndex >= count) {
+        return visualIndex;
+    }
+
+    // Gamma changes apparent stroke weight in the opposite visual direction
+    // when foreground and background polarity are inverted. Mirror only the
+    // global-contrast page so corresponding Light/Dark cards retain the same
+    // thin-to-heavy visual order while still selecting the same gamma values.
+    if (dark && stage == CalibrationStage::GlobalContrast) {
+        return count - 1U - visualIndex;
+    }
+    return visualIndex;
+}
+
 std::size_t NearestCandidateIndex(
     const CalibrationStage stage,
     const ClearTypeProfile& profile) noexcept {
