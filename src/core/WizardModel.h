@@ -16,6 +16,7 @@ enum class WizardPage {
     ClearTypeLevel,
     ContrastCombination,
     GrayscaleEnhancedContrast,
+    MonitorReview,
     Finish,
 };
 
