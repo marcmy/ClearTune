@@ -11,5 +11,9 @@ enum class ThemeMode {
 [[nodiscard]] ThemeMode ThemeModeFromStoredValue(int value) noexcept;
 [[nodiscard]] int ThemeModeToStoredValue(ThemeMode mode) noexcept;
 [[nodiscard]] bool ResolveDarkTheme(ThemeMode mode, bool windowsAppsUseLightTheme) noexcept;
+[[nodiscard]] bool ResolvePreviewDark(
+    ThemeMode mode,
+    bool windowsAppsUseLightTheme,
+    bool comparePolarity) noexcept;
 
 }  // namespace ctt
