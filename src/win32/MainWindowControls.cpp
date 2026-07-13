@@ -15,10 +15,13 @@ constexpr int kClearTypeCheckId = 101;
 constexpr int kTuneAllRadioId = 102;
 constexpr int kTuneOneRadioId = 103;
 constexpr int kMonitorComboId = 104;
+constexpr int kCompareButtonId = 105;
 constexpr int kBackButtonId = 200;
 constexpr int kNextButtonId = IDOK;
 constexpr int kCancelButtonId = IDCANCEL;
 constexpr int kSampleBaseId = 1000;
+constexpr int kFinishLightPreviewId = 1100;
+constexpr int kFinishDarkPreviewId = 1101;
 
 constexpr COLORREF LightBackground() noexcept { return RGB(249, 249, 249); }
 constexpr COLORREF DarkBackground() noexcept { return RGB(32, 32, 32); }
@@ -41,6 +44,19 @@ bool MainWindow::CreateControls(std::wstring& error) {
         0,
         window_,
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kThemeComboId)),
+        instance_,
+        nullptr);
+    compareButton_ = CreateWindowExW(
+        0,
+        L"BUTTON",
+        L"Compare",
+        WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON,
+        0,
+        0,
+        0,
+        0,
+        window_,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kCompareButtonId)),
         instance_,
         nullptr);
     clearTypeCheck_ = CreateWindowExW(
@@ -108,6 +124,34 @@ bool MainWindow::CreateControls(std::wstring& error) {
         reinterpret_cast<HMENU>(static_cast<INT_PTR>(kMonitorComboId)),
         instance_,
         nullptr);
+    finishLightLabel_ = CreateWindowExW(0, L"STATIC", L"Light preview", WS_CHILD | SS_CENTER | SS_NOPREFIX, 0, 0, 0, 0, window_, nullptr, instance_, nullptr);
+    finishDarkLabel_ = CreateWindowExW(0, L"STATIC", L"Dark preview", WS_CHILD | SS_CENTER | SS_NOPREFIX, 0, 0, 0, 0, window_, nullptr, instance_, nullptr);
+    finishLightPreview_ = CreateWindowExW(
+        0,
+        L"BUTTON",
+        L"",
+        WS_CHILD | WS_TABSTOP | BS_OWNERDRAW,
+        0,
+        0,
+        0,
+        0,
+        window_,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kFinishLightPreviewId)),
+        instance_,
+        nullptr);
+    finishDarkPreview_ = CreateWindowExW(
+        0,
+        L"BUTTON",
+        L"",
+        WS_CHILD | WS_TABSTOP | BS_OWNERDRAW,
+        0,
+        0,
+        0,
+        0,
+        window_,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kFinishDarkPreviewId)),
+        instance_,
+        nullptr);
     backButton_ = CreateWindowExW(
         0,
         L"BUTTON",
@@ -165,9 +209,11 @@ bool MainWindow::CreateControls(std::wstring& error) {
     }
 
     if (title_ == nullptr || instruction_ == nullptr || monitorLabel_ == nullptr || themeLabel_ == nullptr ||
-        themeCombo_ == nullptr || clearTypeCheck_ == nullptr || clearTypeDescription_ == nullptr ||
-        tuneAllRadio_ == nullptr || tuneOneRadio_ == nullptr || monitorCombo_ == nullptr ||
-        backButton_ == nullptr || nextButton_ == nullptr || cancelButton_ == nullptr ||
+        themeCombo_ == nullptr || compareButton_ == nullptr || clearTypeCheck_ == nullptr ||
+        clearTypeDescription_ == nullptr || tuneAllRadio_ == nullptr || tuneOneRadio_ == nullptr ||
+        monitorCombo_ == nullptr || finishLightLabel_ == nullptr || finishDarkLabel_ == nullptr ||
+        finishLightPreview_ == nullptr || finishDarkPreview_ == nullptr || backButton_ == nullptr ||
+        nextButton_ == nullptr || cancelButton_ == nullptr ||
         std::any_of(sampleButtons_.begin(), sampleButtons_.end(), [](HWND handle) { return handle == nullptr; })) {
         error = MakeWindowsError(L"Unable to create wizard controls", GetLastError());
         return false;
@@ -191,6 +237,7 @@ bool MainWindow::CreateControls(std::wstring& error) {
 
     CreateFonts();
     UpdateWelcomeControls();
+    UpdateCompareButton();
     return true;
 }
 
@@ -199,39 +246,18 @@ void MainWindow::CreateFonts() {
     const int normalHeight = -MulDiv(9, static_cast<int>(dpi_), 72);
     const int titleHeight = -MulDiv(16, static_cast<int>(dpi_), 72);
     normalFont_ = CreateFontW(
-        normalHeight,
-        0,
-        0,
-        0,
-        FW_NORMAL,
-        FALSE,
-        FALSE,
-        FALSE,
-        DEFAULT_CHARSET,
-        OUT_DEFAULT_PRECIS,
-        CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY,
-        DEFAULT_PITCH | FF_DONTCARE,
-        L"Segoe UI");
+        normalHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+        DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
     titleFont_ = CreateFontW(
-        titleHeight,
-        0,
-        0,
-        0,
-        FW_SEMIBOLD,
-        FALSE,
-        FALSE,
-        FALSE,
-        DEFAULT_CHARSET,
-        OUT_DEFAULT_PRECIS,
-        CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY,
-        DEFAULT_PITCH | FF_DONTCARE,
-        L"Segoe UI");
+        titleHeight, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+        DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
 
-    const std::array<HWND, 16> controls{
-        instruction_, monitorLabel_, themeLabel_, themeCombo_, clearTypeCheck_, clearTypeDescription_,
-        tuneAllRadio_, tuneOneRadio_, monitorCombo_, backButton_, nextButton_, cancelButton_,
+    const std::array<HWND, 21> controls{
+        instruction_, monitorLabel_, themeLabel_, themeCombo_, compareButton_, clearTypeCheck_, clearTypeDescription_,
+        tuneAllRadio_, tuneOneRadio_, monitorCombo_, finishLightLabel_, finishDarkLabel_,
+        finishLightPreview_, finishDarkPreview_, backButton_, nextButton_, cancelButton_,
         sampleButtons_[0], sampleButtons_[1], sampleButtons_[2], sampleButtons_[3]};
     for (const HWND control : controls) {
         if (control != nullptr) {
@@ -264,11 +290,13 @@ void MainWindow::RecreateBackgroundBrush() noexcept {
 
 void MainWindow::ApplyTheme() {
     RecreateBackgroundBrush();
-    ApplyWindowTheme(window_, themeMode_);
+    ApplyWindowTheme(window_, IsDark() ? ThemeMode::Dark : ThemeMode::Light);
     InvalidateRect(window_, nullptr, TRUE);
     for (const HWND button : sampleButtons_) {
         InvalidateRect(button, nullptr, TRUE);
     }
+    RefreshFinishPreviews();
+    UpdateCompareButton();
 }
 
 int MainWindow::Scale(const int value) const noexcept {
@@ -291,8 +319,9 @@ void MainWindow::Layout() {
     MoveWindow(title_, margin, Scale(22), width - margin * 2 - Scale(220), Scale(62), TRUE);
     MoveWindow(themeLabel_, width - margin - Scale(205), Scale(29), Scale(55), controlHeight, TRUE);
     MoveWindow(themeCombo_, width - margin - Scale(145), Scale(25), Scale(145), Scale(160), TRUE);
-    MoveWindow(instruction_, margin, Scale(92), width - margin * 2, Scale(58), TRUE);
-    MoveWindow(monitorLabel_, margin, Scale(150), width - margin * 2, Scale(42), TRUE);
+    MoveWindow(compareButton_, width - margin - Scale(145), Scale(59), Scale(145), controlHeight, TRUE);
+    MoveWindow(instruction_, margin, Scale(96), width - margin * 2, Scale(58), TRUE);
+    MoveWindow(monitorLabel_, margin, Scale(154), width - margin * 2, Scale(42), TRUE);
 
     MoveWindow(clearTypeCheck_, margin, Scale(186), Scale(250), controlHeight, TRUE);
     MoveWindow(clearTypeDescription_, margin + Scale(24), Scale(218), width - margin * 2 - Scale(24), Scale(44), TRUE);
@@ -305,12 +334,26 @@ void MainWindow::Layout() {
     MoveWindow(nextButton_, width - margin - buttonWidth * 2 - buttonGap, buttonsY, buttonWidth, controlHeight, TRUE);
     MoveWindow(backButton_, width - margin - buttonWidth * 3 - buttonGap * 2, buttonsY, buttonWidth, controlHeight, TRUE);
 
+    if (model_.CurrentPage() == WizardPage::Finish && clearTypeEnabled_) {
+        const int gap = Scale(14);
+        const int contentTop = Scale(205);
+        const int labelHeight = Scale(24);
+        const int previewTop = contentTop + labelHeight + Scale(6);
+        const int previewHeight = std::max(Scale(150), buttonsY - Scale(24) - previewTop);
+        const int previewWidth = (width - margin * 2 - gap) / 2;
+        MoveWindow(finishLightLabel_, margin, contentTop, previewWidth, labelHeight, TRUE);
+        MoveWindow(finishDarkLabel_, margin + previewWidth + gap, contentTop, previewWidth, labelHeight, TRUE);
+        MoveWindow(finishLightPreview_, margin, previewTop, previewWidth, previewHeight, TRUE);
+        MoveWindow(finishDarkPreview_, margin + previewWidth + gap, previewTop, previewWidth, previewHeight, TRUE);
+        return;
+    }
+
     if (!model_.IsSamplePage()) {
         return;
     }
 
     const std::size_t count = CandidateCount(model_.CurrentStage());
-    const int contentTop = Scale(196);
+    const int contentTop = Scale(200);
     const int contentBottom = buttonsY - Scale(24);
     const int contentHeight = std::max(Scale(120), contentBottom - contentTop);
     const int contentWidth = width - margin * 2;
@@ -319,24 +362,12 @@ void MainWindow::Layout() {
     if (count == 2) {
         const int cardWidth = (contentWidth - gap) / 2;
         for (std::size_t index = 0; index < count; ++index) {
-            MoveWindow(
-                sampleButtons_[index],
-                margin + static_cast<int>(index) * (cardWidth + gap),
-                contentTop,
-                cardWidth,
-                contentHeight,
-                TRUE);
+            MoveWindow(sampleButtons_[index], margin + static_cast<int>(index) * (cardWidth + gap), contentTop, cardWidth, contentHeight, TRUE);
         }
     } else if (count == 3) {
         const int cardWidth = (contentWidth - gap * 2) / 3;
         for (std::size_t index = 0; index < count; ++index) {
-            MoveWindow(
-                sampleButtons_[index],
-                margin + static_cast<int>(index) * (cardWidth + gap),
-                contentTop,
-                cardWidth,
-                contentHeight,
-                TRUE);
+            MoveWindow(sampleButtons_[index], margin + static_cast<int>(index) * (cardWidth + gap), contentTop, cardWidth, contentHeight, TRUE);
         }
     } else {
         const int cardWidth = (contentWidth - gap * 2) / 3;
@@ -344,13 +375,7 @@ void MainWindow::Layout() {
         for (std::size_t index = 0; index < count; ++index) {
             const int column = static_cast<int>(index % 3);
             const int row = static_cast<int>(index / 3);
-            MoveWindow(
-                sampleButtons_[index],
-                margin + column * (cardWidth + gap),
-                contentTop + row * (cardHeight + gap),
-                cardWidth,
-                cardHeight,
-                TRUE);
+            MoveWindow(sampleButtons_[index], margin + column * (cardWidth + gap), contentTop + row * (cardHeight + gap), cardWidth, cardHeight, TRUE);
         }
     }
 }
