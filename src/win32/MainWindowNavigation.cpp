@@ -27,8 +27,9 @@ void MainWindow::PrepareSelectedMonitors() {
     for (const std::size_t monitorIndex : activeMonitorIndices_) {
         profiles.push_back(monitorIndex < initialProfiles.size() ? initialProfiles[monitorIndex] : ClearTypeProfile{});
     }
-    model_ = WizardModel(std::move(profiles));
+    model_ = WizardModel(std::move(profiles), settings_.InitialGlobalContrast());
     positionedMonitor_ = static_cast<std::size_t>(-1);
+    comparePolarity_ = false;
 }
 
 void MainWindow::SkipUnneededResolutionPage(const bool movingForward) {
@@ -46,7 +47,11 @@ bool MainWindow::PreviewCurrentProfile(std::wstring& error) {
     if (model_.CurrentPage() == WizardPage::Welcome || activeMonitorIndices_.empty()) {
         return true;
     }
-    return settings_.Preview(model_.CurrentProfile(), clearTypeEnabled_, error);
+    return settings_.Preview(
+        model_.CurrentRenderingProfile(),
+        clearTypeEnabled_,
+        model_.GlobalContrast(),
+        error);
 }
 
 void MainWindow::NavigateNext() {
@@ -54,7 +59,7 @@ void MainWindow::NavigateNext() {
         clearTypeEnabled_ = SendMessageW(clearTypeCheck_, BM_GETCHECK, 0, 0) == BST_CHECKED;
         if (!clearTypeEnabled_) {
             std::wstring error;
-            if (!settings_.Preview(model_.CurrentProfile(), false, error)) {
+            if (!settings_.Preview(model_.CurrentRenderingProfile(), false, model_.GlobalContrast(), error)) {
                 MessageBoxW(window_, error.c_str(), L"Unable to preview ClearType settings", MB_OK | MB_ICONERROR);
                 return;
             }
@@ -65,7 +70,7 @@ void MainWindow::NavigateNext() {
 
         PrepareSelectedMonitors();
         std::wstring error;
-        if (!settings_.Preview(model_.CurrentProfile(), true, error)) {
+        if (!PreviewCurrentProfile(error)) {
             MessageBoxW(window_, error.c_str(), L"Unable to preview ClearType settings", MB_OK | MB_ICONERROR);
             return;
         }
@@ -96,6 +101,7 @@ void MainWindow::NavigateNext() {
     }
 
     model_.Next();
+    comparePolarity_ = false;
     SkipUnneededResolutionPage(true);
     if (model_.CurrentPage() != WizardPage::Finish && model_.CurrentMonitorIndex() != previousMonitor) {
         std::wstring error;
@@ -105,6 +111,7 @@ void MainWindow::NavigateNext() {
             return;
         }
     }
+    ApplyTheme();
     RefreshPage();
 }
 
@@ -112,6 +119,7 @@ void MainWindow::NavigateBack() {
     if (!model_.Back()) {
         return;
     }
+    comparePolarity_ = false;
     SkipUnneededResolutionPage(false);
 
     std::wstring error;
@@ -122,6 +130,7 @@ void MainWindow::NavigateBack() {
     } else if (!PreviewCurrentProfile(error)) {
         MessageBoxW(window_, error.c_str(), L"Unable to preview ClearType settings", MB_OK | MB_ICONERROR);
     }
+    ApplyTheme();
     RefreshPage();
 }
 
@@ -133,11 +142,22 @@ void MainWindow::SelectSample(const std::size_t index) {
 void MainWindow::ThemeSelectionChanged() {
     const LRESULT selection = SendMessageW(themeCombo_, CB_GETCURSEL, 0, 0);
     themeMode_ = ThemeModeFromStoredValue(selection == CB_ERR ? 0 : static_cast<int>(selection));
+    comparePolarity_ = false;
     std::wstring error;
     if (!SaveThemeMode(themeMode_, error)) {
         MessageBoxW(window_, error.c_str(), L"Unable to save theme preference", MB_OK | MB_ICONWARNING);
     }
     ApplyTheme();
+    RefreshPage();
+}
+
+void MainWindow::ComparePolarity() {
+    if (!model_.IsSamplePage()) {
+        return;
+    }
+    comparePolarity_ = !comparePolarity_;
+    ApplyTheme();
+    RefreshPage();
 }
 
 void MainWindow::MonitorSelectionChanged() {
@@ -186,13 +206,15 @@ bool MainWindow::ApplySettings(std::wstring& error) {
             skippedMonitor = true;
             continue;
         }
-        targets.push_back(ApplyTarget{monitor.displayKey, profiles[modelIndex], monitor.primary});
+        ClearTypeProfile profile = profiles[modelIndex];
+        profile.gammaLevel = model_.GlobalContrast();
+        targets.push_back(ApplyTarget{monitor.displayKey, profile, monitor.primary});
     }
     if (targets.empty()) {
         error = L"None of the monitors from this tuning session are still connected.";
         return false;
     }
-    if (!settings_.Apply(targets, clearTypeEnabled_, error)) {
+    if (!settings_.Apply(targets, clearTypeEnabled_, model_.GlobalContrast(), error)) {
         return false;
     }
     if (skippedMonitor) {
