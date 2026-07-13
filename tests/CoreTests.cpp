@@ -76,6 +76,14 @@ int main() {
     CHECK(ctt::CandidateCount(CalibrationStage::ContrastCombination) == 6);
     CHECK(ctt::CandidateCount(CalibrationStage::GrayscaleEnhancedContrast) == 6);
 
+    CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::GlobalContrast, 0, false) == 0);
+    CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::GlobalContrast, 5, false) == 5);
+    CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::GlobalContrast, 0, true) == 5);
+    CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::GlobalContrast, 2, true) == 3);
+    CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::GlobalContrast, 5, true) == 0);
+    CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::ClearTypeLevel, 0, true) == 0);
+    CHECK(ctt::CandidateIndexForPolarity(CalibrationStage::GlobalContrast, 6, true) == 6);
+
     CHECK(ctt::BuildGlobalContrastCandidates(1400) ==
         (std::array<int, 6>{1000, 1200, 1400, 1600, 1800, 2000}));
     CHECK(ctt::BuildGlobalContrastCandidates(1500) ==
