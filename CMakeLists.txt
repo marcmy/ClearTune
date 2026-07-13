@@ -10,6 +10,7 @@ add_library(cleartune_core
     src/core/DisplayKey.cpp
     src/core/Candidates.cpp
     src/core/Conversions.cpp
+    src/core/MonitorIdentity.cpp
     src/core/MonitorLayout.cpp
     src/core/WizardModel.cpp
 )
@@ -79,3 +80,10 @@ if(MSVC)
     target_compile_options(cleartune_navigation_review_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
 endif()
 add_test(NAME navigation_review COMMAND cleartune_navigation_review_tests)
+
+add_executable(cleartune_final_polish_tests tests/FinalPolishTests.cpp)
+target_link_libraries(cleartune_final_polish_tests PRIVATE cleartune_core)
+if(MSVC)
+    target_compile_options(cleartune_final_polish_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+endif()
+add_test(NAME final_polish COMMAND cleartune_final_polish_tests)
