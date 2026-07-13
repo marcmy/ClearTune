@@ -38,6 +38,7 @@ The Compare control never changes the saved theme preference or the current sele
 - Shows a warning only for portrait orientation or a known reduced resolution.
 - Uses the stock-style DirectWrite bitmap-render-target path and Calibri 11-point samples.
 - Previews the selected global ClearType settings as you advance through the wizard.
+- Treats navigation transactionally: every **Back** restores the exact working state from before the corresponding **Next**.
 - Restores the original global settings when you cancel or return to the opening page.
 - Persists per-monitor and global settings only when you click **Finish**.
 - Captures global and per-display ClearType values before the session.
@@ -54,7 +55,7 @@ The app reads and writes the same user-scoped settings used by Windows font rend
 HKCU\Software\Microsoft\Avalon.Graphics\DISPLAY…
 ```
 
-During calibration, ClearTune temporarily previews the compatible global font-smoothing values through `SystemParametersInfoW`, using non-persistent calls. Cancel and Back-to-start restore the launch snapshot. Per-monitor registry values and persistent global settings are written only when **Finish** is clicked. A failed final apply automatically restores the launch snapshot.
+During calibration, ClearTune temporarily previews the compatible global font-smoothing values through `SystemParametersInfoW`, using non-persistent calls. Each Back reverses the previous page commit, while Cancel and Back-to-start restore the launch snapshot. Per-monitor registry values and persistent global settings are written only when **Finish** is clicked. A failed final apply automatically restores the launch snapshot.
 
 For an independent before/after record, run:
 
