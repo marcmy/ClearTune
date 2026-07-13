@@ -1,6 +1,7 @@
 #include "core/Candidates.h"
 #include "core/Conversions.h"
 #include "core/DisplayKey.h"
+#include "core/Profile.h"
 #include "core/Resolution.h"
 #include "core/Theme.h"
 #include "core/WizardModel.h"
@@ -51,6 +52,24 @@ int main() {
 
     using ctt::CalibrationStage;
     using ctt::ClearTypeProfile;
+
+    const ClearTypeProfile capturedProfile{
+        .pixelStructure = 2,
+        .gammaLevel = 1400,
+        .clearTypeLevel = 0,
+        .textContrastLevel = 6,
+        .enhancedContrastLevel = 400,
+        .grayscaleEnhancedContrastLevel = 400,
+    };
+    const ClearTypeProfile stockWorking = ctt::MakeStockWorkingProfile(capturedProfile, 2200);
+    CHECK(stockWorking.pixelStructure == 2);
+    CHECK(stockWorking.gammaLevel == 2200);
+    CHECK(stockWorking.clearTypeLevel == 100);
+    CHECK(stockWorking.textContrastLevel == 1);
+    CHECK(stockWorking.enhancedContrastLevel == 50);
+    CHECK(stockWorking.grayscaleEnhancedContrastLevel == 100);
+    CHECK(ctt::MakeStockWorkingProfile(capturedProfile, 0).gammaLevel == 1800);
+
     CHECK(ctt::CandidateCount(CalibrationStage::PixelStructure) == 2);
     CHECK(ctt::CandidateCount(CalibrationStage::GlobalContrast) == 6);
     CHECK(ctt::CandidateCount(CalibrationStage::ClearTypeLevel) == 3);
@@ -77,16 +96,16 @@ int main() {
     CHECK(profile.grayscaleEnhancedContrastLevel == 200);
     CHECK(profile.gammaLevel == originalGamma);
 
-    ClearTypeProfile renderingBase{};
+    ClearTypeProfile renderingBase = stockWorking;
     const auto combinationRender = ctt::RenderingProfileForCandidate(
         renderingBase, CalibrationStage::ContrastCombination, 4, 1400);
-    CHECK(combinationRender.gammaLevel == 1400);
+    CHECK(combinationRender.gammaLevel == 2200);
     CHECK(combinationRender.enhancedContrastLevel == 300);
     CHECK(combinationRender.grayscaleEnhancedContrastLevel == 300);
     CHECK(combinationRender.textContrastLevel == 1);
     const auto grayscaleRender = ctt::RenderingProfileForCandidate(
         renderingBase, CalibrationStage::GrayscaleEnhancedContrast, 5, 1600);
-    CHECK(grayscaleRender.gammaLevel == 1600);
+    CHECK(grayscaleRender.gammaLevel == 2200);
     CHECK(grayscaleRender.clearTypeLevel == 0);
     CHECK(grayscaleRender.enhancedContrastLevel == 400);
     CHECK(grayscaleRender.grayscaleEnhancedContrastLevel == 400);
@@ -104,11 +123,15 @@ int main() {
     CHECK(ctt::ToSpiOrientation(ClearTypeProfile{.pixelStructure = 1}) == 1u);
     CHECK(ctt::ToSpiOrientation(ClearTypeProfile{.pixelStructure = 2}) == 0u);
 
-    std::vector<ClearTypeProfile> seededProfiles(2);
-    seededProfiles[0].gammaLevel = 1800;
-    seededProfiles[1].gammaLevel = 2200;
+    std::vector<ClearTypeProfile> seededProfiles{
+        ctt::MakeStockWorkingProfile(capturedProfile, 2200),
+        ctt::MakeStockWorkingProfile(ClearTypeProfile{.pixelStructure = 1}, 1800),
+    };
     ctt::WizardModel seededWizard(seededProfiles, 1400);
-    CHECK(seededWizard.CurrentProfile().gammaLevel == 1800);
+    CHECK(seededWizard.CurrentProfile().gammaLevel == 2200);
+    CHECK(seededWizard.CurrentProfile().enhancedContrastLevel == 50);
+    CHECK(seededWizard.CurrentRenderingProfile().gammaLevel == 2200);
+    CHECK(seededWizard.CandidateRenderingProfile(0).gammaLevel == 2200);
     CHECK(seededWizard.GlobalContrast() == 1400);
 
     ctt::WizardModel disabledWizard(2, 1400);
@@ -117,18 +140,22 @@ int main() {
     CHECK(disabledWizard.Back());
     CHECK(disabledWizard.CurrentPage() == ctt::WizardPage::Welcome);
 
-    ctt::WizardModel wizard(2, 1400);
+    ctt::WizardModel wizard(seededProfiles, 1400);
     CHECK(wizard.CurrentPage() == ctt::WizardPage::Welcome);
     CHECK(wizard.Next());
     CHECK(wizard.CurrentPage() == ctt::WizardPage::Resolution);
     CHECK(wizard.Next());
     CHECK(wizard.CurrentPage() == ctt::WizardPage::PixelStructure);
+    CHECK(wizard.CandidateRenderingProfile(0).gammaLevel == 2200);
     CHECK(wizard.Next());
     CHECK(wizard.CurrentPage() == ctt::WizardPage::GlobalContrast);
     wizard.SelectCandidate(4);
     CHECK(wizard.GlobalContrast() == 1800);
+    CHECK(wizard.Profiles()[0].gammaLevel == 1800);
+    CHECK(wizard.Profiles()[1].gammaLevel == 1800);
     CHECK(wizard.Next());
     CHECK(wizard.CurrentPage() == ctt::WizardPage::ClearTypeLevel);
+    CHECK(wizard.CandidateRenderingProfile(0).gammaLevel == 1800);
     CHECK(wizard.Next());
     CHECK(wizard.CurrentPage() == ctt::WizardPage::ContrastCombination);
     CHECK(wizard.Next());
