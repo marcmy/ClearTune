@@ -178,9 +178,10 @@ bool SampleRenderer::Initialize(std::wstring& error) {
         return false;
     }
 
-    // Modern cttune.exe uses Calibri at 11 points. DirectWrite font sizes are
-    // device-independent pixels, so 11 pt is 14.666... DIPs.
-    constexpr FLOAT kSampleFontSize = 11.0F * 96.0F / 72.0F;
+    // The stock binary passes 11.0 directly to DirectWrite. CreateTextFormat
+    // expects device-independent pixels, not typographic points; converting it
+    // again made ClearTune's samples roughly one-third larger and more forgiving.
+    constexpr FLOAT kSampleFontSize = 11.0F;
     result = writeFactory_->CreateTextFormat(
         L"Calibri",
         nullptr,
@@ -195,7 +196,7 @@ bool SampleRenderer::Initialize(std::wstring& error) {
         return false;
     }
     textFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-    textFormat_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    textFormat_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
     textFormat_->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
     return true;
 }
@@ -291,7 +292,7 @@ bool SampleRenderer::DrawSample(
 
     const FLOAT widthDips = static_cast<FLOAT>(widthPixels) / pixelsPerDip;
     const FLOAT heightDips = static_cast<FLOAT>(heightPixels) / pixelsPerDip;
-    constexpr FLOAT kHorizontalPadding = 12.0F;
+    constexpr FLOAT kHorizontalPadding = 8.0F;
     constexpr FLOAT kVerticalPadding = 8.0F;
     Microsoft::WRL::ComPtr<IDWriteTextLayout> layout;
     result = writeFactory_->CreateTextLayout(
