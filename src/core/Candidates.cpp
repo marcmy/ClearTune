@@ -116,7 +116,6 @@ ClearTypeProfile RenderingProfileForCandidate(
     const std::size_t index,
     const int globalContrast) noexcept {
     ClearTypeProfile renderingProfile = profile;
-    renderingProfile.gammaLevel = std::clamp(globalContrast, 1000, 2200);
 
     if (stage == CalibrationStage::GlobalContrast) {
         const auto values = BuildGlobalContrastCandidates(globalContrast);
@@ -126,6 +125,9 @@ ClearTypeProfile RenderingProfileForCandidate(
         return renderingProfile;
     }
 
+    // Non-global pages retain the monitor working gamma selected before or on
+    // stage 2. Replacing it with SPI font-smoothing contrast made every sample
+    // inherit an unrelated, much heavier baseline.
     ApplyCandidate(renderingProfile, stage, index);
     switch (stage) {
         case CalibrationStage::ContrastCombination:
