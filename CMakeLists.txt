@@ -29,6 +29,7 @@ if(WIN32)
         src/win32/MainWindowControls.cpp
         src/win32/MainWindowNavigation.cpp
         src/win32/MainWindowView.cpp
+        src/win32/MonitorMapControl.cpp
         src/win32/MonitorService.cpp
         src/win32/Preferences.cpp
         src/win32/SampleRenderer.cpp
