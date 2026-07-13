@@ -1,6 +1,7 @@
 #include "core/Candidates.h"
 #include "core/Conversions.h"
 #include "core/DisplayKey.h"
+#include "core/MonitorLayout.h"
 #include "core/Profile.h"
 #include "core/Resolution.h"
 #include "core/Theme.h"
@@ -49,6 +50,34 @@ int main() {
     CHECK(ctt::MeetsOrExceedsPreferredResolution(1920, 1080, 1440, 1080, false));
     CHECK(!ctt::MeetsOrExceedsPreferredResolution(1280, 720, 1920, 1080, false));
     CHECK(ctt::MeetsOrExceedsPreferredResolution(1080, 1920, 1920, 1080, true));
+
+    const std::array<ctt::MonitorLayoutInput, 2> monitorInputs{{
+        {.left = 0, .top = 0, .width = 1920, .height = 1080},
+        {.left = 1920, .top = -420, .width = 1080, .height = 1920},
+    }};
+    const auto monitorLayout = ctt::BuildMonitorLayout(monitorInputs, 520, 280, 16, 24);
+    CHECK(monitorLayout.size() == 2);
+    CHECK(monitorLayout[0].monitorRect.left < monitorLayout[1].monitorRect.left);
+    CHECK(monitorLayout[1].monitorRect.top < monitorLayout[0].monitorRect.top);
+    CHECK(monitorLayout[0].monitorRect.Width() > monitorLayout[0].monitorRect.Height());
+    CHECK(monitorLayout[1].monitorRect.Height() > monitorLayout[1].monitorRect.Width());
+    CHECK(monitorLayout[0].selectionRect.top < monitorLayout[0].monitorRect.top);
+    CHECK(monitorLayout[0].selectionRect.left >= 16);
+    CHECK(monitorLayout[1].selectionRect.right <= 504);
+    CHECK(monitorLayout[0].selectionRect.bottom <= 264);
+    CHECK(monitorLayout[1].selectionRect.bottom <= 264);
+    const auto firstHit = ctt::HitTestMonitorLayout(
+        monitorLayout,
+        monitorLayout[0].monitorRect.left + 2,
+        monitorLayout[0].monitorRect.top + 2);
+    CHECK(firstHit.has_value() && *firstHit == 0);
+    const auto labelHit = ctt::HitTestMonitorLayout(
+        monitorLayout,
+        monitorLayout[1].selectionRect.left + 2,
+        monitorLayout[1].selectionRect.top + 2);
+    CHECK(labelHit.has_value() && *labelHit == 1);
+    CHECK(!ctt::HitTestMonitorLayout(monitorLayout, 0, 0).has_value());
+    CHECK(ctt::BuildMonitorLayout({}, 520, 280, 16, 24).empty());
 
     using ctt::CalibrationStage;
     using ctt::ClearTypeProfile;
