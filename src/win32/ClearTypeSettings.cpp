@@ -108,11 +108,7 @@ bool SetSpi(
 }
 
 void RedrawAllWindows() noexcept {
-    RedrawWindow(
-        nullptr,
-        nullptr,
-        nullptr,
-        RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+    RedrawWindow(nullptr, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
 }
 
 }  // namespace
@@ -150,13 +146,13 @@ bool ClearTypeSettingsSession::Capture(std::span<const std::wstring> displayKeys
                 static_cast<unsigned long>(openStatus));
             return false;
         }
+
         ClearTypeProfile profile = ProfileFromSnapshot(snapshot);
+        if (!snapshot.gammaLevel.present) {
+            profile.gammaLevel = static_cast<int>(std::clamp(global_.contrast, 1000U, 2200U));
+        }
         if (!snapshot.pixelStructure.present) {
             profile.pixelStructure = global_.orientation == FE_FONTSMOOTHINGORIENTATIONBGR ? 2 : 1;
-        }
-        if (!snapshot.textContrastLevel.present) {
-            const int globalContrast = static_cast<int>(std::clamp(global_.contrast, 1000U, 2200U));
-            profile.textContrastLevel = (globalContrast - 1000 + 100) / 200;
         }
         initialProfiles_.push_back(profile);
         displays_.push_back(std::move(snapshot));
@@ -230,6 +226,7 @@ bool ClearTypeSettingsSession::WriteDisplayProfile(const ApplyTarget& target, st
 bool ClearTypeSettingsSession::ApplyGlobal(
     const ClearTypeProfile& primaryProfile,
     const bool enableClearType,
+    const int globalContrast,
     const UINT flags,
     std::wstring& error) {
     if (!SetSpi(
@@ -257,7 +254,7 @@ bool ClearTypeSettingsSession::ApplyGlobal(
     if (!SetSpi(
             SPI_SETFONTSMOOTHINGCONTRAST,
             0,
-            SpiValue(ToSpiContrast(primaryProfile)),
+            SpiValue(static_cast<UINT>(std::clamp(globalContrast, 1000, 2200))),
             flags,
             L"Unable to set font smoothing contrast",
             error)) {
@@ -278,12 +275,13 @@ bool ClearTypeSettingsSession::ApplyGlobal(
 bool ClearTypeSettingsSession::Preview(
     const ClearTypeProfile& profile,
     const bool enableClearType,
+    const int globalContrast,
     std::wstring& error) {
     if (!captured_) {
         error = L"ClearType settings were not captured before Preview.";
         return false;
     }
-    if (!ApplyGlobal(profile, enableClearType, 0, error)) {
+    if (!ApplyGlobal(profile, enableClearType, globalContrast, 0, error)) {
         return false;
     }
     previewActive_ = true;
@@ -304,6 +302,7 @@ bool ClearTypeSettingsSession::RestorePreview(std::wstring& error) {
 bool ClearTypeSettingsSession::Apply(
     const std::span<const ApplyTarget> targets,
     const bool enableClearType,
+    const int globalContrast,
     std::wstring& error) {
     if (!captured_ || targets.empty()) {
         error = L"ClearType settings were not captured before Apply.";
@@ -329,7 +328,7 @@ bool ClearTypeSettingsSession::Apply(
     const auto primary = std::find_if(
         targets.begin(), targets.end(), [](const ApplyTarget& target) { return target.primary; });
     const ClearTypeProfile& globalProfile = (primary != targets.end() ? primary : targets.begin())->profile;
-    if (!ApplyGlobal(globalProfile, enableClearType, kPersistentApplyFlags, error)) {
+    if (!ApplyGlobal(globalProfile, enableClearType, globalContrast, kPersistentApplyFlags, error)) {
         std::wstring rollbackError;
         const bool restored = Restore(rollbackError);
         if (!restored && rollbackError.empty()) {
@@ -476,6 +475,10 @@ const std::vector<ClearTypeProfile>& ClearTypeSettingsSession::InitialProfiles()
 
 bool ClearTypeSettingsSession::InitialClearTypeEnabled() const noexcept {
     return global_.enabled != FALSE && global_.type == FE_FONTSMOOTHINGCLEARTYPE;
+}
+
+int ClearTypeSettingsSession::InitialGlobalContrast() const noexcept {
+    return static_cast<int>(std::clamp(global_.contrast, 1000U, 2200U));
 }
 
 }  // namespace ctt::win32
