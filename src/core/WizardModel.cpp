@@ -59,6 +59,10 @@ CalibrationStage WizardModel::CurrentStage() const noexcept {
         case WizardPage::ContrastCombination:
             return CalibrationStage::ContrastCombination;
         case WizardPage::GrayscaleEnhancedContrast:
+        case WizardPage::MonitorReview:
+        case WizardPage::Finish:
+        case WizardPage::Welcome:
+        case WizardPage::Resolution:
         default:
             return CalibrationStage::GrayscaleEnhancedContrast;
     }
@@ -160,12 +164,17 @@ bool WizardModel::AdvancePage() noexcept {
             page_ = WizardPage::GrayscaleEnhancedContrast;
             return true;
         case WizardPage::GrayscaleEnhancedContrast:
-            if (currentMonitor_ + 1U < profiles_.size()) {
-                ++currentMonitor_;
-                page_ = WizardPage::Resolution;
-            } else {
+            page_ = currentMonitor_ + 1U < profiles_.size()
+                ? WizardPage::MonitorReview
+                : WizardPage::Finish;
+            return true;
+        case WizardPage::MonitorReview:
+            if (currentMonitor_ + 1U >= profiles_.size()) {
                 page_ = WizardPage::Finish;
+                return true;
             }
+            ++currentMonitor_;
+            page_ = WizardPage::Resolution;
             return true;
         case WizardPage::Finish:
             return false;
