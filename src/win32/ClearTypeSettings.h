@@ -7,6 +7,7 @@
 #endif
 #include <windows.h>
 
+#include <cstddef>
 #include <span>
 #include <string>
 #include <vector>
@@ -59,6 +60,7 @@ public:
     [[nodiscard]] bool Restore(std::wstring& error);
 
     [[nodiscard]] const std::vector<ClearTypeProfile>& InitialProfiles() const noexcept;
+    [[nodiscard]] bool InitialGammaPresent(std::size_t displayIndex) const noexcept;
     [[nodiscard]] bool InitialClearTypeEnabled() const noexcept;
     [[nodiscard]] int InitialGlobalContrast() const noexcept;
 
