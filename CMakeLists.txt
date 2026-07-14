@@ -29,8 +29,8 @@ if(WIN32)
     set(CLEARTUNE_ICON_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/win32/ClearTune.ico")
     set(CLEARTUNE_ICON_PATH "${CLEARTUNE_GENERATED_DIR}/ClearTune.ico")
     execute_process(
-        COMMAND powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command
-            "$encoded = (Get-Content -Raw -LiteralPath '${CLEARTUNE_ICON_SOURCE}').Trim(); [IO.File]::WriteAllBytes('${CLEARTUNE_ICON_PATH}', [Convert]::FromBase64String($encoded))"
+        COMMAND powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command
+            "[IO.File]::WriteAllBytes('${CLEARTUNE_ICON_PATH}', [Convert]::FromBase64String((Get-Content -Raw -LiteralPath '${CLEARTUNE_ICON_SOURCE}').Trim()))"
         RESULT_VARIABLE CLEARTUNE_ICON_DECODE_RESULT
     )
     if(NOT CLEARTUNE_ICON_DECODE_RESULT EQUAL 0)
