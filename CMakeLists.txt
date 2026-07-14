@@ -23,6 +23,27 @@ else()
 endif()
 
 if(WIN32)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    set(CLEARTUNE_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+    set(CLEARTUNE_ICON_PATH "${CLEARTUNE_GENERATED_DIR}/ClearTune.ico")
+    set(CLEARTUNE_MANIFEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/win32/app.manifest")
+    file(MAKE_DIRECTORY "${CLEARTUNE_GENERATED_DIR}")
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/decode_base64_file.py"
+                "${CMAKE_CURRENT_SOURCE_DIR}/src/win32/ClearTune.ico"
+                "${CLEARTUNE_ICON_PATH}"
+        RESULT_VARIABLE CLEARTUNE_ICON_DECODE_RESULT
+        ERROR_VARIABLE CLEARTUNE_ICON_DECODE_ERROR
+    )
+    if(NOT CLEARTUNE_ICON_DECODE_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to decode ClearTune icon: ${CLEARTUNE_ICON_DECODE_ERROR}")
+    endif()
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/win32/app.rc"
+        "${CLEARTUNE_GENERATED_DIR}/app.rc"
+        @ONLY
+    )
+
     add_executable(ClearTune WIN32
         src/win32/App.cpp
         src/win32/ClearTypeSettings.cpp
@@ -37,7 +58,7 @@ if(WIN32)
         src/win32/SampleRenderer.cpp
         src/win32/ThemeService.cpp
         src/win32/Win32Error.cpp
-        src/win32/app.rc
+        "${CLEARTUNE_GENERATED_DIR}/app.rc"
     )
     target_include_directories(ClearTune PRIVATE src src/win32)
     target_compile_definitions(ClearTune PRIVATE
