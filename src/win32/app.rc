@@ -1,5 +1,6 @@
 #include <windows.h>
 
+101 ICON "ClearTune.ico"
 1 RT_MANIFEST "app.manifest"
 
 VS_VERSION_INFO VERSIONINFO

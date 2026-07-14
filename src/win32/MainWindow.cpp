@@ -13,6 +13,7 @@ namespace ctt::win32 {
 namespace {
 constexpr wchar_t kWindowClass[] = L"ClearTune.MainWindow";
 constexpr wchar_t kWindowTitle[] = L"ClearTune";
+constexpr int kApplicationIconId = 101;
 constexpr int kThemeComboId = 100;
 constexpr int kClearTypeCheckId = 101;
 constexpr int kTuneAllRadioId = 102;
@@ -69,8 +70,20 @@ bool MainWindow::RegisterWindowClass(std::wstring& error) {
     windowClass.hInstance = instance_;
     windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     windowClass.lpszClassName = kWindowClass;
-    windowClass.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
-    windowClass.hIconSm = LoadIconW(nullptr, IDI_APPLICATION);
+    windowClass.hIcon = static_cast<HICON>(LoadImageW(
+        instance_,
+        MAKEINTRESOURCEW(kApplicationIconId),
+        IMAGE_ICON,
+        GetSystemMetrics(SM_CXICON),
+        GetSystemMetrics(SM_CYICON),
+        LR_DEFAULTCOLOR));
+    windowClass.hIconSm = static_cast<HICON>(LoadImageW(
+        instance_,
+        MAKEINTRESOURCEW(kApplicationIconId),
+        IMAGE_ICON,
+        GetSystemMetrics(SM_CXSMICON),
+        GetSystemMetrics(SM_CYSMICON),
+        LR_DEFAULTCOLOR));
 
     if (RegisterClassExW(&windowClass) == 0) {
         const DWORD lastError = GetLastError();
