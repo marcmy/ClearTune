@@ -29,13 +29,16 @@ if(WIN32)
     set(CLEARTUNE_ICON_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/win32/ClearTune.ico")
     set(CLEARTUNE_ICON_PATH "${CLEARTUNE_GENERATED_DIR}/ClearTune.ico")
     execute_process(
-        COMMAND certutil.exe -f -decode "${CLEARTUNE_ICON_SOURCE}" "${CLEARTUNE_ICON_PATH}"
-        RESULT_VARIABLE CLEARTUNE_ICON_DECODE_RESULT
+        COMMAND powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+            -File "${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWindowsIcon.ps1"
+            -Source "${CLEARTUNE_ICON_SOURCE}"
+            -Destination "${CLEARTUNE_ICON_PATH}"
+        RESULT_VARIABLE CLEARTUNE_ICON_PREPARE_RESULT
         OUTPUT_QUIET
-        ERROR_VARIABLE CLEARTUNE_ICON_DECODE_ERROR
+        ERROR_VARIABLE CLEARTUNE_ICON_PREPARE_ERROR
     )
-    if(NOT CLEARTUNE_ICON_DECODE_RESULT EQUAL 0)
-        message(FATAL_ERROR "Failed to decode ClearTune application icon: ${CLEARTUNE_ICON_DECODE_ERROR}")
+    if(NOT CLEARTUNE_ICON_PREPARE_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to prepare ClearTune application icon: ${CLEARTUNE_ICON_PREPARE_ERROR}")
     endif()
 
     set(CLEARTUNE_MANIFEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/win32/app.manifest")
