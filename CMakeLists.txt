@@ -23,31 +23,6 @@ else()
 endif()
 
 if(WIN32)
-    set(CLEARTUNE_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
-    file(MAKE_DIRECTORY "${CLEARTUNE_GENERATED_DIR}")
-
-    set(CLEARTUNE_ICON_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/win32/ClearTune.ico")
-    set(CLEARTUNE_ICON_PATH "${CLEARTUNE_GENERATED_DIR}/ClearTune.ico")
-    execute_process(
-        COMMAND powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
-            -File "${CMAKE_CURRENT_SOURCE_DIR}/cmake/PrepareWindowsIcon.ps1"
-            -Source "${CLEARTUNE_ICON_SOURCE}"
-            -Destination "${CLEARTUNE_ICON_PATH}"
-        RESULT_VARIABLE CLEARTUNE_ICON_PREPARE_RESULT
-        OUTPUT_QUIET
-        ERROR_VARIABLE CLEARTUNE_ICON_PREPARE_ERROR
-    )
-    if(NOT CLEARTUNE_ICON_PREPARE_RESULT EQUAL 0)
-        message(FATAL_ERROR "Failed to prepare ClearTune application icon: ${CLEARTUNE_ICON_PREPARE_ERROR}")
-    endif()
-
-    set(CLEARTUNE_MANIFEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/win32/app.manifest")
-    configure_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/win32/app.rc"
-        "${CLEARTUNE_GENERATED_DIR}/app.rc"
-        @ONLY
-    )
-
     add_executable(ClearTune WIN32
         src/win32/App.cpp
         src/win32/ClearTypeSettings.cpp
@@ -62,7 +37,7 @@ if(WIN32)
         src/win32/SampleRenderer.cpp
         src/win32/ThemeService.cpp
         src/win32/Win32Error.cpp
-        "${CLEARTUNE_GENERATED_DIR}/app.rc"
+        src/win32/app.rc
     )
     target_include_directories(ClearTune PRIVATE src src/win32)
     target_compile_definitions(ClearTune PRIVATE
