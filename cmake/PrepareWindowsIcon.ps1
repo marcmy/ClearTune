@@ -21,8 +21,8 @@ for ($index = 0; $index -lt $count; $index++) {
         throw 'ICO directory is truncated.'
     }
 
-    $size = [BitConverter]::ToUInt32($bytes, $entryOffset + 8)
-    $offset = [BitConverter]::ToUInt32($bytes, $entryOffset + 12)
+    $size = [int][BitConverter]::ToUInt32($bytes, $entryOffset + 8)
+    $offset = [int][BitConverter]::ToUInt32($bytes, $entryOffset + 12)
     if (($offset + $size) -gt $bytes.Length -or $size -lt 8) {
         continue
     }
@@ -37,8 +37,8 @@ for ($index = 0; $index -lt $count; $index++) {
 
     if ($isPng) {
         $entries += [pscustomobject]@{
-            Directory = $bytes[$entryOffset..($entryOffset + 15)]
-            Data = $bytes[$offset..($offset + $size - 1)]
+            Directory = [byte[]]$bytes[$entryOffset..($entryOffset + 15)]
+            Data = [byte[]]$bytes[$offset..($offset + $size - 1)]
         }
     }
 }
@@ -47,21 +47,21 @@ if ($entries.Count -eq 0) {
     throw 'ICO contains no PNG-backed images.'
 }
 
-$stream = New-Object IO.MemoryStream
-$writer = New-Object IO.BinaryWriter($stream)
+$stream = [IO.MemoryStream]::new()
+$writer = [IO.BinaryWriter]::new($stream)
 $writer.Write([UInt16]0)
 $writer.Write([UInt16]1)
 $writer.Write([UInt16]$entries.Count)
 
 $nextDataOffset = 6 + (16 * $entries.Count)
 foreach ($entry in $entries) {
-    $writer.Write($entry.Directory, 0, 12)
+    $writer.Write([byte[]]$entry.Directory, 0, 12)
     $writer.Write([UInt32]$nextDataOffset)
     $nextDataOffset += $entry.Data.Length
 }
 
 foreach ($entry in $entries) {
-    $writer.Write($entry.Data)
+    $writer.Write([byte[]]$entry.Data)
 }
 
 $writer.Flush()
