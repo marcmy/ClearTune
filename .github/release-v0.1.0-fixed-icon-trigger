@@ -1,1 +1,1 @@
-Build, test, package, tag, and publish v0.1.0 from clean fixed-icon commit 5ddb6c89.
+Regenerate the Windows icon with native desktop sizes, rebuild, test, and replace v0.1.0.
