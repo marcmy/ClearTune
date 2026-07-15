@@ -84,17 +84,23 @@ jobs:
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
           gh release delete v0.1.0 --repo $env:GITHUB_REPOSITORY --yes --cleanup-tag *> $null
-          gh api --method DELETE "repos/$env:GITHUB_REPOSITORY/git/refs/tags/v0.1.0" *> $null
+          git push origin :refs/tags/v0.1.0 *> $null
           exit 0
 
-      - name: Publish v0.1.0
+      - name: Create v0.1.0 tag
+        shell: pwsh
+        run: |
+          git tag -f v0.1.0 ebbf67d5e5b3180e554f21549875c90e31953a2e
+          git push origin refs/tags/v0.1.0
+
+      - name: Publish v0.1.0 from existing tag
         shell: pwsh
         run: |
           gh release create v0.1.0 `
             release/ClearTune-windows-x64.zip `
             release/SHA256SUMS.txt `
             --repo $env:GITHUB_REPOSITORY `
-            --target ebbf67d5e5b3180e554f21549875c90e31953a2e `
+            --verify-tag `
             --title 'ClearTune 0.1.0' `
             --notes-file RELEASE_NOTES.md
 
