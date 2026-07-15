@@ -13,6 +13,13 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+    env:
+      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+      GH_PAT: ${{ secrets.GH_PAT }}
+      PAT: ${{ secrets.PAT }}
+      UPSTREAM_SYNC_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+      SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+      SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
 
     steps:
       - name: Check out verified icon commit
@@ -20,6 +27,30 @@ jobs:
         with:
           ref: ebbf67d5e5b3180e554f21549875c90e31953a2e
           fetch-depth: 0
+
+      - name: Select trusted release token
+        shell: pwsh
+        run: |
+          $candidates = [ordered]@{
+            RELEASE_TOKEN = $env:RELEASE_TOKEN
+            GH_PAT = $env:GH_PAT
+            PAT = $env:PAT
+            UPSTREAM_SYNC_TOKEN = $env:UPSTREAM_SYNC_TOKEN
+            SYNC_TOKEN = $env:SYNC_TOKEN
+            SCOOP_BUCKET_TOKEN = $env:SCOOP_BUCKET_TOKEN
+          }
+
+          $selected = $candidates.GetEnumerator() |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_.Value) } |
+            Select-Object -First 1
+
+          if ($null -eq $selected) {
+            throw 'No trusted release PAT is available to this repository.'
+          }
+
+          "GH_TOKEN=$($selected.Value)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "RELEASE_TOKEN_NAME=$($selected.Key)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "Using trusted token secret: $($selected.Key)"
 
       - name: Verify release source icon
         shell: pwsh
@@ -86,8 +117,6 @@ jobs:
 
       - name: Remove previous release and tag if present
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
           gh release delete v0.1.0 --repo $env:GITHUB_REPOSITORY --yes --cleanup-tag *> $null
@@ -96,8 +125,6 @@ jobs:
 
       - name: Publish v0.1.0
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           gh release create v0.1.0 `
             ClearTune-windows-x64.zip `
@@ -109,8 +136,6 @@ jobs:
 
       - name: Download and verify published asset
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           New-Item -ItemType Directory -Path published | Out-Null
           gh release download v0.1.0 `
@@ -135,6 +160,7 @@ jobs:
             icon_sha256 = '605daf15aa75dfc5b2c69728d56ce06bc6356a24040891a44f572c147cd65dfa'
             ico_frames = @(16, 32, 256)
             zip_sha256 = $env:ZIP_SHA256
+            token_secret = $env:RELEASE_TOKEN_NAME
             run_id = $env:GITHUB_RUN_ID
           } | ConvertTo-Json
           $status | Set-Content .github/release-v0.1.0-fixed-icon-status.json
