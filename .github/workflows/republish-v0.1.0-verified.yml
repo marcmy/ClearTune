@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  issues:
+    types:
+      - opened
   workflow_dispatch:
 
 permissions:
@@ -11,8 +14,14 @@ permissions:
 
 jobs:
   release:
-    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'release: republish v0.1.0 (verified)'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.head_commit.message == 'release: republish v0.1.0 (verified)' ||
+      (github.event_name == 'issues' && github.event.issue.title == 'Trigger verified ClearTune v0.1.0 republish')
     runs-on: windows-latest
+    outputs:
+      sha256: ${{ steps.verify.outputs.sha256 }}
+      release_url: ${{ steps.verify.outputs.release_url }}
 
     steps:
       - name: Check out repository
@@ -113,38 +122,48 @@ jobs:
           "sha256=$actual" >> $env:GITHUB_OUTPUT
           "release_url=$($release.url)" >> $env:GITHUB_OUTPUT
 
-      - name: Record verified success
-        shell: pwsh
+  report:
+    needs:
+      - release
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Record workflow result
         env:
           GH_TOKEN: ${{ github.token }}
-          VERIFIED_SHA256: ${{ steps.verify.outputs.sha256 }}
-          RELEASE_URL: ${{ steps.verify.outputs.release_url }}
+          RESULT: ${{ needs.release.result }}
+          ZIP_SHA256: ${{ needs.release.outputs.sha256 }}
+          RELEASE_URL: ${{ needs.release.outputs.release_url }}
+        shell: bash
         run: |
-          $receipt = [ordered]@{
-            tag = 'v0.1.0'
-            source_sha = $env:GITHUB_SHA
-            run_id = $env:GITHUB_RUN_ID
-            run_attempt = $env:GITHUB_RUN_ATTEMPT
-            zip_sha256 = $env:VERIFIED_SHA256
-            release_url = $env:RELEASE_URL
-            verified_at_utc = [DateTime]::UtcNow.ToString('o')
-          } | ConvertTo-Json
+          set -euo pipefail
 
-          $bytes = [Text.Encoding]::UTF8.GetBytes($receipt + "`n")
-          $encoded = [Convert]::ToBase64String($bytes)
-          $path = '.github/release-v0.1.0-success.json'
-          $apiPath = "repos/$env:GITHUB_REPOSITORY/contents/$path"
-          $existingSha = gh api "$apiPath?ref=main" --jq .sha 2>$null
+          receipt=$(jq -n \
+            --arg result "$RESULT" \
+            --arg trigger_event "$GITHUB_EVENT_NAME" \
+            --arg source_sha "$GITHUB_SHA" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg zip_sha256 "$ZIP_SHA256" \
+            --arg release_url "$RELEASE_URL" \
+            --arg verified_at_utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{tag:"v0.1.0", result:$result, trigger_event:$trigger_event, source_sha:$source_sha, run_id:$run_id, run_attempt:$run_attempt, zip_sha256:$zip_sha256, release_url:$release_url, verified_at_utc:$verified_at_utc}')
 
-          $arguments = @(
-            'api', '--method', 'PUT', $apiPath,
-            '-f', 'message=chore: record verified v0.1.0 republish',
-            '-f', "content=$encoded",
-            '-f', 'branch=main'
-          )
-          if ($existingSha) {
-            $arguments += @('-f', "sha=$existingSha")
-          }
+          encoded=$(printf '%s\n' "$receipt" | base64 -w0)
+          path='.github/release-v0.1.0-status.json'
+          api_path="repos/$GITHUB_REPOSITORY/contents/$path"
+          existing_sha=$(gh api "$api_path?ref=main" --jq .sha 2>/dev/null || true)
 
-          & gh @arguments
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if [[ -n "$existing_sha" ]]; then
+            gh api --method PUT "$api_path" \
+              -f 'message=chore: record v0.1.0 republish result' \
+              -f "content=$encoded" \
+              -f 'branch=main' \
+              -f "sha=$existing_sha"
+          else
+            gh api --method PUT "$api_path" \
+              -f 'message=chore: record v0.1.0 republish result' \
+              -f "content=$encoded" \
+              -f 'branch=main'
+          fi
