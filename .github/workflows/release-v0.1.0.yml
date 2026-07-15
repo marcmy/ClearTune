@@ -11,7 +11,6 @@ permissions:
 
 jobs:
   release:
-    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'release: republish v0.1.0'
     runs-on: windows-latest
 
     steps:
