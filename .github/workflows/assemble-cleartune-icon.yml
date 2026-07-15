@@ -1,0 +1,54 @@
+name: Assemble ClearTune icon
+
+on:
+  push:
+    branches:
+      - fix/sharp-transparent-icon
+    paths:
+      - .github/cleartune-icon/ready
+
+permissions:
+  contents: write
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Reconstruct and verify icon
+        shell: bash
+        run: |
+          cat .github/cleartune-icon/part-* | base64 --decode > src/win32/ClearTune.ico
+          python - <<'PY'
+          from pathlib import Path
+          import struct
+
+          path = Path('src/win32/ClearTune.ico')
+          with path.open('rb') as file:
+              reserved, kind, count = struct.unpack('<HHH', file.read(6))
+              if (reserved, kind) != (0, 1):
+                  raise SystemExit('Generated file is not a valid ICO')
+
+              frames = []
+              for _ in range(count):
+                  width, height, _, _, _, _, _, _ = struct.unpack('<BBBBHHII', file.read(16))
+                  frames.append((256 if width == 0 else width, 256 if height == 0 else height))
+
+          expected = {(16, 16), (20, 20), (24, 24), (32, 32), (40, 40),
+                      (48, 48), (64, 64), (96, 96), (128, 128), (256, 256)}
+          if set(frames) != expected:
+              raise SystemExit(f'Unexpected ICO frames: {frames}')
+          PY
+
+      - name: Commit icon
+        shell: bash
+        run: |
+          rm -rf .github/cleartune-icon
+          rm .github/workflows/assemble-cleartune-icon.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/win32/ClearTune.ico .github
+          git commit -m "fix: replace blurry icon with sharp transparent artwork"
+          git push
