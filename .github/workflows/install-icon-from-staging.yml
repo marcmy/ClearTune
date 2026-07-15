@@ -1,4 +1,4 @@
-name: Install staged ClearTune icon
+name: Republish ClearTune 0.1.0 with fixed icon
 
 on:
   issues:
@@ -9,72 +9,31 @@ permissions:
   issues: write
 
 jobs:
-  install:
-    if: github.event.issue.title == 'Install verified ClearTune icon'
+  release:
+    if: github.event.issue.title == 'Republish ClearTune v0.1.0 with fixed icon'
     runs-on: windows-latest
 
     steps:
-      - name: Check out staging branch
+      - name: Check out verified icon commit
         uses: actions/checkout@v7
         with:
-          ref: fix/full-resolution-icon
+          ref: ebbf67d5e5b3180e554f21549875c90e31953a2e
           fetch-depth: 0
 
-      - name: Decode and verify icon
+      - name: Verify release source icon
         shell: pwsh
         run: |
-          $parts = Get-ChildItem .github/icon-payload/part*.txt | Sort-Object Name
-          if ($parts.Count -ne 13) {
-            throw "Expected 13 icon payload parts, found $($parts.Count)."
-          }
-
-          $base64 = ($parts | ForEach-Object { Get-Content -Raw $_.FullName }) -join ''
-          if ($base64.Length -ne 17776) {
-            throw "Expected 17776 base64 characters, found $($base64.Length)."
-          }
-
-          $compressed = [Convert]::FromBase64String($base64)
-          if ($compressed.Length -ne 13330) {
-            throw "Expected 13330 compressed bytes, found $($compressed.Length)."
-          }
-
-          $compressedHash = [Convert]::ToHexString(
-            [Security.Cryptography.SHA256]::HashData($compressed)).ToLowerInvariant()
-          $expectedCompressedHash = '7a564ba68d5874248a1e895ef0380ca62240fad5912f10d2306d44be0e1e4829'
-          if ($compressedHash -ne $expectedCompressedHash) {
-            throw "Compressed payload SHA-256 mismatch: expected $expectedCompressedHash, got $compressedHash."
-          }
-
-          $input = [IO.MemoryStream]::new()
-          $input.Write($compressed, 0, $compressed.Length)
-          $input.Position = 0
-          $gzip = [IO.Compression.GZipStream]::new(
-            $input,
-            [IO.Compression.CompressionMode]::Decompress)
-          $output = [IO.File]::Create('src/win32/ClearTune.ico')
-          try {
-            $gzip.CopyTo($output)
-          }
-          finally {
-            $output.Dispose()
-            $gzip.Dispose()
-            $input.Dispose()
-          }
-
           $expectedHash = '605daf15aa75dfc5b2c69728d56ce06bc6356a24040891a44f572c147cd65dfa'
           $actualHash = (Get-FileHash src/win32/ClearTune.ico -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($actualHash -ne $expectedHash) {
-            throw "Icon SHA-256 mismatch: expected $expectedHash, got $actualHash."
+            throw "Source icon SHA-256 mismatch: expected $expectedHash, got $actualHash."
           }
 
           $bytes = [IO.File]::ReadAllBytes('src/win32/ClearTune.ico')
-          if ([BitConverter]::ToUInt16($bytes, 0) -ne 0 -or
-              [BitConverter]::ToUInt16($bytes, 2) -ne 1 -or
-              [BitConverter]::ToUInt16($bytes, 4) -ne 3) {
-            throw 'Invalid ICO header or unexpected image count.'
-          }
+          $count = [BitConverter]::ToUInt16($bytes, 4)
+          if ($count -ne 3) { throw "Expected 3 ICO frames, found $count." }
 
-          $sizes = for ($i = 0; $i -lt 3; $i++) {
+          $sizes = for ($i = 0; $i -lt $count; $i++) {
             $width = [int]$bytes[6 + (16 * $i)]
             if ($width -eq 0) { 256 } else { $width }
           }
@@ -82,8 +41,8 @@ jobs:
             throw "Unexpected ICO frame sizes: $($sizes -join ',')."
           }
 
-          "Verified icon SHA-256: $actualHash"
-          "Verified icon frames: $($sizes -join ', ')"
+          "Verified source icon: $actualHash"
+          "Verified frames: $($sizes -join ', ')"
 
       - name: Configure
         run: cmake -S . -B build -A x64
@@ -91,28 +50,88 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
-          cmake --build build --config Release --parallel 2>&1 | Tee-Object -FilePath windows-build.log
+          cmake --build build --config Release --parallel
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
 
-      - name: Commit verified icon only
+      - name: Package
         shell: pwsh
         run: |
-          Remove-Item -Recurse -Force .github/icon-payload
-          Remove-Item -Force .github/icon-fix-trigger
-          Remove-Item -Force .github/workflows/install-full-resolution-icon.yml
-          Remove-Item -Force .github/icon-fix-status.txt -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path package | Out-Null
+          Copy-Item build/Release/ClearTune.exe package/
+          Copy-Item README.md, LICENSE package/
+          Compress-Archive -Path package/* -DestinationPath ClearTune-windows-x64.zip
 
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git commit -m 'fix: replace blurry icon with full-resolution transparent asset'
-          git push origin HEAD:fix/full-resolution-icon
+          $zipHash = (Get-FileHash ClearTune-windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$zipHash  ClearTune-windows-x64.zip" | Set-Content -NoNewline SHA256SUMS.txt
+          "ZIP_SHA256=$zipHash" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Close trigger issue
+          @'
+          # ClearTune 0.1.0
+
+          The first public release of ClearTune: a native C++/Win32 ClearType calibration wizard with genuine System, Light, and Dark sample polarity.
+
+          ## Highlights
+
+          - Stock-compatible ClearType sample stages and live preview behavior
+          - System, Light, and Dark calibration themes
+          - One-click opposite-polarity comparison without changing the selection
+          - Interactive monitor map using the real Windows display arrangement
+          - EDID/DisplayConfig monitor model names when available
+          - Per-monitor Light/Dark review when tuning multiple displays
+          - Exact final preview of the settings that Finish will save
+          - Transactional Back and Cancel behavior with launch-state rollback
+          - Sharp transparent Windows application icon with native small frames and a 256×256 Explorer frame
+          - No administrator rights, service, updater, telemetry, or third-party runtime
+
+          Download `ClearTune-windows-x64.zip`, extract it, and run `ClearTune.exe`.
+          '@ | Set-Content RELEASE_NOTES.md
+
+      - name: Replace v0.1.0 release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue close ${{ github.event.issue.number }} --reason completed
+        run: |
+          gh release delete v0.1.0 --yes --cleanup-tag 2>$null
+          gh api --method DELETE "repos/$env:GITHUB_REPOSITORY/git/refs/tags/v0.1.0" 2>$null
+
+          gh release create v0.1.0 `
+            ClearTune-windows-x64.zip `
+            SHA256SUMS.txt `
+            --target ebbf67d5e5b3180e554f21549875c90e31953a2e `
+            --title 'ClearTune 0.1.0' `
+            --notes-file RELEASE_NOTES.md
+
+      - name: Download and verify published asset
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Path published | Out-Null
+          gh release download v0.1.0 `
+            --pattern ClearTune-windows-x64.zip `
+            --dir published
+
+          $publishedHash = (Get-FileHash published/ClearTune-windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($publishedHash -ne $env:ZIP_SHA256) {
+            throw "Published ZIP mismatch: expected $env:ZIP_SHA256, got $publishedHash."
+          }
+
+      - name: Record verified result
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $body = @"
+          Verified republish succeeded.
+
+          - Source commit: `ebbf67d5e5b3180e554f21549875c90e31953a2e`
+          - Icon SHA-256: `605daf15aa75dfc5b2c69728d56ce06bc6356a24040891a44f572c147cd65dfa`
+          - ICO frames: `16, 32, 256`
+          - Published ZIP SHA-256: `$env:ZIP_SHA256`
+          - Release: https://github.com/$env:GITHUB_REPOSITORY/releases/tag/v0.1.0
+          "@
+          gh issue comment ${{ github.event.issue.number }} --body $body
+          gh issue close ${{ github.event.issue.number }} --reason completed
