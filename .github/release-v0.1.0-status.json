@@ -1,0 +1,11 @@
+{
+  "tag": "v0.1.0",
+  "result": "skipped",
+  "trigger_event": "push",
+  "source_sha": "26bf4015fc6c1cd9e8f2d46328b4d2f35edf90f5",
+  "run_id": "29421415741",
+  "run_attempt": "1",
+  "zip_sha256": "",
+  "release_url": "",
+  "verified_at_utc": "2026-07-15T13:57:24Z"
+}
