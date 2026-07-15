@@ -1,0 +1,95 @@
+name: Install full-resolution ClearTune icon
+
+on:
+  push:
+    branches:
+      - fix/full-resolution-icon
+    paths:
+      - .github/icon-fix-trigger
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out icon branch
+        uses: actions/checkout@v7
+        with:
+          ref: fix/full-resolution-icon
+          fetch-depth: 0
+
+      - name: Decode and verify icon
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem .github/icon-payload/part*.txt | Sort-Object Name
+          if ($parts.Count -ne 13) {
+            throw "Expected 13 icon payload parts, found $($parts.Count)."
+          }
+
+          $base64 = ($parts | ForEach-Object { Get-Content -Raw $_.FullName }) -join ''
+          $compressed = [Convert]::FromBase64String($base64)
+          $input = [IO.MemoryStream]::new(,$compressed)
+          $gzip = [IO.Compression.GZipStream]::new(
+            $input,
+            [IO.Compression.CompressionMode]::Decompress)
+          $output = [IO.File]::Create('src/win32/ClearTune.ico')
+          try {
+            $gzip.CopyTo($output)
+          }
+          finally {
+            $output.Dispose()
+            $gzip.Dispose()
+            $input.Dispose()
+          }
+
+          $expectedHash = '605daf15aa75dfc5b2c69728d56ce06bc6356a24040891a44f572c147cd65dfa'
+          $actualHash = (Get-FileHash src/win32/ClearTune.ico -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) {
+            throw "Icon SHA-256 mismatch: expected $expectedHash, got $actualHash."
+          }
+
+          $bytes = [IO.File]::ReadAllBytes('src/win32/ClearTune.ico')
+          if ([BitConverter]::ToUInt16($bytes, 0) -ne 0 -or
+              [BitConverter]::ToUInt16($bytes, 2) -ne 1 -or
+              [BitConverter]::ToUInt16($bytes, 4) -ne 3) {
+            throw 'Invalid ICO header or unexpected image count.'
+          }
+
+          $sizes = for ($i = 0; $i -lt 3; $i++) {
+            $width = [int]$bytes[6 + (16 * $i)]
+            if ($width -eq 0) { 256 } else { $width }
+          }
+          if (($sizes -join ',') -ne '16,32,256') {
+            throw "Unexpected ICO frame sizes: $($sizes -join ',')."
+          }
+
+          "Verified icon SHA-256: $actualHash"
+          "Verified icon frames: $($sizes -join ', ')"
+
+      - name: Configure
+        run: cmake -S . -B build -A x64
+
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --parallel 2>&1 | Tee-Object -FilePath windows-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Commit verified icon only
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force .github/icon-payload
+          Remove-Item -Force .github/icon-fix-trigger
+          Remove-Item -Force .github/workflows/install-full-resolution-icon.yml
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: replace blurry icon with full-resolution transparent asset'
+          git push origin HEAD:fix/full-resolution-icon
