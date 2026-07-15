@@ -1,11 +1,11 @@
 {
   "tag": "v0.1.0",
-  "result": "skipped",
-  "trigger_event": "push",
-  "source_sha": "26bf4015fc6c1cd9e8f2d46328b4d2f35edf90f5",
-  "run_id": "29421415741",
+  "result": "success",
+  "trigger_event": "issues",
+  "source_sha": "c0341ee731fb2e5718238e9aba9964d904cf4cb4",
+  "run_id": "29421426826",
   "run_attempt": "1",
-  "zip_sha256": "",
-  "release_url": "",
-  "verified_at_utc": "2026-07-15T13:57:24Z"
+  "zip_sha256": "f79bca9d12d47cc57d52484134729438aee4f0b3281ce0b2e1e3cbb652bc908b",
+  "release_url": "https://github.com/marcmy/ClearTune/releases/tag/v0.1.0",
+  "verified_at_utc": "2026-07-15T13:58:50Z"
 }
