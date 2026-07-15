@@ -1,16 +1,17 @@
 name: Republish ClearTune 0.1.0 with fixed icon
 
 on:
-  issues:
-    types: [opened]
+  push:
+    branches:
+      - main
+    paths:
+      - .github/release-v0.1.0-fixed-icon-trigger
 
 permissions:
   contents: write
-  issues: write
 
 jobs:
   release:
-    if: github.event.issue.title == 'Republish ClearTune v0.1.0 with fixed icon'
     runs-on: windows-latest
 
     steps:
@@ -41,17 +42,11 @@ jobs:
             throw "Unexpected ICO frame sizes: $($sizes -join ',')."
           }
 
-          "Verified source icon: $actualHash"
-          "Verified frames: $($sizes -join ', ')"
-
       - name: Configure
         run: cmake -S . -B build -A x64
 
       - name: Build
-        shell: pwsh
-        run: |
-          cmake --build build --config Release --parallel
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        run: cmake --build build --config Release --parallel
 
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
@@ -104,26 +99,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $PSNativeCommandUseErrorActionPreference = $false
-          $publishOutput = & gh release create v0.1.0 `
+          gh release create v0.1.0 `
             ClearTune-windows-x64.zip `
             SHA256SUMS.txt `
             --repo $env:GITHUB_REPOSITORY `
             --target ebbf67d5e5b3180e554f21549875c90e31953a2e `
             --title 'ClearTune 0.1.0' `
-            --notes-file RELEASE_NOTES.md 2>&1
-          $publishCode = $LASTEXITCODE
-          $publishText = ($publishOutput | Out-String).Trim()
-
-          if ($publishCode -ne 0) {
-            $body = "Release creation failed with exit code $publishCode.`n`n$publishText"
-            gh issue comment ${{ github.event.issue.number }} `
-              --repo $env:GITHUB_REPOSITORY `
-              --body $body
-            exit $publishCode
-          }
-
-          $publishText
+            --notes-file RELEASE_NOTES.md
 
       - name: Download and verify published asset
         shell: pwsh
@@ -141,19 +123,24 @@ jobs:
             throw "Published ZIP mismatch: expected $env:ZIP_SHA256, got $publishedHash."
           }
 
-      - name: Record verified result
+      - name: Record verified republish
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          $body = @"
-          Verified republish succeeded.
+          git switch main
+          git pull --ff-only origin main
 
-          - Source commit: ebbf67d5e5b3180e554f21549875c90e31953a2e
-          - Icon SHA-256: 605daf15aa75dfc5b2c69728d56ce06bc6356a24040891a44f572c147cd65dfa
-          - ICO frames: 16, 32, 256
-          - Published ZIP SHA-256: $env:ZIP_SHA256
-          - Release: https://github.com/$env:GITHUB_REPOSITORY/releases/tag/v0.1.0
-          "@
-          gh issue comment ${{ github.event.issue.number }} --repo $env:GITHUB_REPOSITORY --body $body
-          gh issue close ${{ github.event.issue.number }} --repo $env:GITHUB_REPOSITORY --reason completed
+          $status = [ordered]@{
+            result = 'success'
+            source_commit = 'ebbf67d5e5b3180e554f21549875c90e31953a2e'
+            icon_sha256 = '605daf15aa75dfc5b2c69728d56ce06bc6356a24040891a44f572c147cd65dfa'
+            ico_frames = @(16, 32, 256)
+            zip_sha256 = $env:ZIP_SHA256
+            run_id = $env:GITHUB_RUN_ID
+          } | ConvertTo-Json
+          $status | Set-Content .github/release-v0.1.0-fixed-icon-status.json
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/release-v0.1.0-fixed-icon-status.json
+          git commit -m 'chore: record fixed-icon v0.1.0 republish'
+          git push origin main
