@@ -1,0 +1,41 @@
+MSBuild version 18.7.8+1ac568fee for .NET Framework
+
+  1>Checking Build System
+  Building Custom Rule D:/a/ClearTune/ClearTune/CMakeLists.txt
+  Theme.cpp
+  DisplayKey.cpp
+  Candidates.cpp
+  Conversions.cpp
+  MonitorIdentity.cpp
+  MonitorLayout.cpp
+  WizardModel.cpp
+  Generating Code...
+  cleartune_core.vcxproj -> D:\a\ClearTune\ClearTune\build\Release\cleartune_core.lib
+  Building Custom Rule D:/a/ClearTune/ClearTune/CMakeLists.txt
+  Building Custom Rule D:/a/ClearTune/ClearTune/CMakeLists.txt
+  Building Custom Rule D:/a/ClearTune/ClearTune/CMakeLists.txt
+  Building Custom Rule D:/a/ClearTune/ClearTune/CMakeLists.txt
+  App.cpp
+  FinalPolishTests.cpp
+  CoreTests.cpp
+  NavigationReviewTests.cpp
+  cleartune_navigation_review_tests.vcxproj -> D:\a\ClearTune\ClearTune\build\Release\cleartune_navigation_review_tests.exe
+  cleartune_core_tests.vcxproj -> D:\a\ClearTune\ClearTune\build\Release\cleartune_core_tests.exe
+  cleartune_final_polish_tests.vcxproj -> D:\a\ClearTune\ClearTune\build\Release\cleartune_final_polish_tests.exe
+  ClearTypeSettings.cpp
+  ClearTypeSettingsAccessors.cpp
+  MainWindow.cpp
+  MainWindowControls.cpp
+D:\a\ClearTune\ClearTune\src\win32\MainWindow.cpp(279,37): warning C4834: discarding return value of function with [[nodiscard]] attribute [D:\a\ClearTune\ClearTune\build\ClearTune.vcxproj]
+D:\a\ClearTune\ClearTune\src\win32\MainWindow.cpp(321,41): warning C4834: discarding return value of function with [[nodiscard]] attribute [D:\a\ClearTune\ClearTune\build\ClearTune.vcxproj]
+  MainWindowNavigation.cpp
+  MainWindowView.cpp
+  MonitorMapControl.cpp
+  MonitorService.cpp
+  Preferences.cpp
+  SampleRenderer.cpp
+  ThemeService.cpp
+  Win32Error.cpp
+  Generating Code...
+  ClearTune.vcxproj -> D:\a\ClearTune\ClearTune\build\Release\ClearTune.exe
+  Building Custom Rule D:/a/ClearTune/ClearTune/CMakeLists.txt
