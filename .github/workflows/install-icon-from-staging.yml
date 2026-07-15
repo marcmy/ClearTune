@@ -1,4 +1,4 @@
-name: Build ClearTune 0.1.0 release
+name: Repair ClearTune icon and republish 0.1.0
 
 on:
   push:
@@ -8,39 +8,164 @@ on:
       - .github/release-v0.1.0-fixed-icon-trigger
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  build:
+  repair-build-release:
     runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_BRANCH: fix/full-resolution-icon
 
     steps:
-      - name: Check out clean fixed-icon release commit
+      - name: Check out clean release branch
         uses: actions/checkout@v7
         with:
-          ref: 5ddb6c89dd5b0bcd76c81bb4bd479e0a41d8287c
+          ref: ${{ env.RELEASE_BRANCH }}
           fetch-depth: 0
 
-      - name: Verify release source icon
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Generate native multi-size Windows icon
         shell: pwsh
         run: |
-          $expectedHash = '605daf15aa75dfc5b2c69728d56ce06bc6356a24040891a44f572c147cd65dfa'
-          $actualHash = (Get-FileHash src/win32/ClearTune.ico -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actualHash -ne $expectedHash) {
-            throw "Source icon SHA-256 mismatch: expected $expectedHash, got $actualHash."
-          }
+          python -m pip install --disable-pip-version-check pillow numpy
 
+          @'
+          from pathlib import Path
+          import hashlib
+          import io
+          import struct
+
+          import numpy as np
+          from PIL import Image, ImageFilter
+
+          icon_path = Path('src/win32/ClearTune.ico')
+          original = Image.open(icon_path)
+          available = sorted(original.ico.sizes())
+          source_size = max(available, key=lambda value: value[0] * value[1])
+          source = original.ico.getimage(source_size).convert('RGBA')
+
+          target_sizes = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256]
+
+          def resize_alpha_safe(image, size):
+              rgba = np.asarray(image.convert('RGBA'), dtype=np.float32)
+              alpha = rgba[:, :, 3:4] / 255.0
+              premultiplied = rgba[:, :, :3] * alpha
+
+              prem_image = Image.fromarray(
+                  np.clip(premultiplied, 0, 255).astype(np.uint8), 'RGB'
+              ).resize((size, size), Image.Resampling.LANCZOS)
+              alpha_image = Image.fromarray(
+                  rgba[:, :, 3].astype(np.uint8), 'L'
+              ).resize((size, size), Image.Resampling.LANCZOS)
+
+              prem_array = np.asarray(prem_image, dtype=np.float32)
+              alpha_array = np.asarray(alpha_image, dtype=np.float32)[:, :, None]
+              divisor = np.maximum(alpha_array / 255.0, 1.0 / 255.0)
+              rgb = np.clip(prem_array / divisor, 0, 255).astype(np.uint8)
+              return Image.fromarray(
+                  np.dstack((rgb, alpha_array[:, :, 0].astype(np.uint8))), 'RGBA'
+              )
+
+          encoded_frames = []
+          for size in target_sizes:
+              frame = source.copy() if source.size == (size, size) else resize_alpha_safe(source, size)
+
+              if size <= 24:
+                  sharpening = (0.60, 190, 1)
+              elif size <= 48:
+                  sharpening = (0.80, 155, 1)
+              elif size <= 96:
+                  sharpening = (1.00, 105, 1)
+              elif size <= 128:
+                  sharpening = (1.00, 70, 1)
+              else:
+                  sharpening = None
+
+              if sharpening:
+                  radius, percent, threshold = sharpening
+                  rgb = frame.convert('RGB').filter(
+                      ImageFilter.UnsharpMask(
+                          radius=radius,
+                          percent=percent,
+                          threshold=threshold,
+                      )
+                  )
+                  rgb.putalpha(frame.getchannel('A'))
+                  frame = rgb
+
+              stream = io.BytesIO()
+              frame.save(stream, format='PNG', optimize=True)
+              encoded_frames.append((size, stream.getvalue()))
+
+          header = struct.pack('<HHH', 0, 1, len(encoded_frames))
+          offset = 6 + (16 * len(encoded_frames))
+          directory = []
+          payload = []
+
+          for size, data in encoded_frames:
+              dimension = 0 if size == 256 else size
+              directory.append(
+                  struct.pack(
+                      '<BBBBHHII',
+                      dimension,
+                      dimension,
+                      0,
+                      0,
+                      1,
+                      32,
+                      len(data),
+                      offset,
+                  )
+              )
+              payload.append(data)
+              offset += len(data)
+
+          icon_bytes = header + b''.join(directory) + b''.join(payload)
+          icon_path.write_bytes(icon_bytes)
+
+          digest = hashlib.sha256(icon_bytes).hexdigest()
+          print(f'Original frames: {available}')
+          print(f'Generated frames: {target_sizes}')
+          print(f'ICO SHA-256: {digest}')
+
+          with open(Path.home() / 'icon-sha.txt', 'w', encoding='utf-8') as handle:
+              handle.write(digest)
+          '@ | Set-Content generate_icon.py
+
+          python generate_icon.py
+
+      - name: Verify and commit repaired icon
+        shell: pwsh
+        run: |
           $bytes = [IO.File]::ReadAllBytes('src/win32/ClearTune.ico')
           $count = [BitConverter]::ToUInt16($bytes, 4)
-          if ($count -ne 3) { throw "Expected 3 ICO frames, found $count." }
+          if ($count -ne 10) { throw "Expected 10 ICO frames, found $count." }
 
           $sizes = for ($i = 0; $i -lt $count; $i++) {
             $width = [int]$bytes[6 + (16 * $i)]
             if ($width -eq 0) { 256 } else { $width }
           }
-          if (($sizes -join ',') -ne '16,32,256') {
+          $expected = @(16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
+          if (($sizes -join ',') -ne ($expected -join ',')) {
             throw "Unexpected ICO frame sizes: $($sizes -join ',')."
           }
+
+          $iconHash = (Get-FileHash src/win32/ClearTune.ico -Algorithm SHA256).Hash.ToLowerInvariant()
+          "ICON_SHA256=$iconHash" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/win32/ClearTune.ico
+          git commit -m 'fix: add native Windows icon sizes'
+          git push origin "HEAD:$env:RELEASE_BRANCH"
+
+          $sourceCommit = git rev-parse HEAD
+          "SOURCE_COMMIT=$sourceCommit" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Configure
         run: cmake -S . -B build -A x64
@@ -61,12 +186,71 @@ jobs:
 
           $zipHash = (Get-FileHash ClearTune-windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
           "$zipHash  ClearTune-windows-x64.zip" | Set-Content -NoNewline SHA256SUMS.txt
+          "ZIP_SHA256=$zipHash" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Upload packaged release
+          @'
+          # ClearTune 0.1.0
+
+          The first public release of ClearTune: a native C++/Win32 ClearType calibration wizard with genuine System, Light, and Dark sample polarity.
+
+          ## Highlights
+
+          - Stock-compatible ClearType sample stages and live preview behavior
+          - System, Light, and Dark calibration themes
+          - One-click opposite-polarity comparison without changing the selection
+          - Interactive monitor map using the real Windows display arrangement
+          - EDID/DisplayConfig monitor model names when available
+          - Per-monitor Light/Dark review when tuning multiple displays
+          - Exact final preview of the settings that Finish will save
+          - Transactional Back and Cancel behavior with launch-state rollback
+          - Native Windows icon frames at 16, 20, 24, 32, 40, 48, 64, 96, 128, and 256 pixels
+          - No administrator rights, service, updater, telemetry, or third-party runtime
+
+          Download `ClearTune-windows-x64.zip`, extract it, and run `ClearTune.exe`.
+          '@ | Set-Content RELEASE_NOTES.md
+
+      - name: Preserve packaged release
         uses: actions/upload-artifact@v7
         with:
-          name: ClearTune-v0.1.0-windows-x64
+          name: ClearTune-v0.1.0-crisp-icon
           path: |
             ClearTune-windows-x64.zip
             SHA256SUMS.txt
           if-no-files-found: error
+
+      - name: Replace v0.1.0 tag and release
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          gh release delete v0.1.0 --repo $env:GITHUB_REPOSITORY --yes --cleanup-tag *> $null
+          git push origin :refs/tags/v0.1.0 *> $null
+          $PSNativeCommandUseErrorActionPreference = $true
+
+          git tag -f v0.1.0 $env:SOURCE_COMMIT
+          git push origin refs/tags/v0.1.0
+
+          gh release create v0.1.0 `
+            ClearTune-windows-x64.zip `
+            SHA256SUMS.txt `
+            --repo $env:GITHUB_REPOSITORY `
+            --verify-tag `
+            --title 'ClearTune 0.1.0' `
+            --notes-file RELEASE_NOTES.md
+
+      - name: Download and verify published release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path published | Out-Null
+          gh release download v0.1.0 `
+            --repo $env:GITHUB_REPOSITORY `
+            --pattern ClearTune-windows-x64.zip `
+            --dir published
+
+          $publishedHash = (Get-FileHash published/ClearTune-windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($publishedHash -ne $env:ZIP_SHA256) {
+            throw "Published ZIP mismatch: expected $env:ZIP_SHA256, got $publishedHash."
+          }
+
+          Write-Host "Verified source commit: $env:SOURCE_COMMIT"
+          Write-Host "Verified icon SHA-256: $env:ICON_SHA256"
+          Write-Host "Verified ZIP SHA-256: $env:ZIP_SHA256"
