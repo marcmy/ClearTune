@@ -1,4 +1,4 @@
-name: Republish ClearTune 0.1.0 with fixed icon
+name: Build ClearTune 0.1.0 release
 
 on:
   push:
@@ -8,13 +8,11 @@ on:
       - .github/release-v0.1.0-fixed-icon-trigger
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  build:
     runs-on: windows-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
 
     steps:
       - name: Check out verified icon commit
@@ -63,30 +61,8 @@ jobs:
 
           $zipHash = (Get-FileHash ClearTune-windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
           "$zipHash  ClearTune-windows-x64.zip" | Set-Content -NoNewline SHA256SUMS.txt
-          "ZIP_SHA256=$zipHash" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-          @'
-          # ClearTune 0.1.0
-
-          The first public release of ClearTune: a native C++/Win32 ClearType calibration wizard with genuine System, Light, and Dark sample polarity.
-
-          ## Highlights
-
-          - Stock-compatible ClearType sample stages and live preview behavior
-          - System, Light, and Dark calibration themes
-          - One-click opposite-polarity comparison without changing the selection
-          - Interactive monitor map using the real Windows display arrangement
-          - EDID/DisplayConfig monitor model names when available
-          - Per-monitor Light/Dark review when tuning multiple displays
-          - Exact final preview of the settings that Finish will save
-          - Transactional Back and Cancel behavior with launch-state rollback
-          - Sharp transparent Windows application icon with native small frames and a 256×256 Explorer frame
-          - No administrator rights, service, updater, telemetry, or third-party runtime
-
-          Download `ClearTune-windows-x64.zip`, extract it, and run `ClearTune.exe`.
-          '@ | Set-Content RELEASE_NOTES.md
-
-      - name: Preserve packaged release
+      - name: Upload packaged release
         uses: actions/upload-artifact@v7
         with:
           name: ClearTune-v0.1.0-windows-x64
@@ -94,59 +70,3 @@ jobs:
             ClearTune-windows-x64.zip
             SHA256SUMS.txt
           if-no-files-found: error
-
-      - name: Remove previous release and tag if present
-        shell: pwsh
-        run: |
-          $PSNativeCommandUseErrorActionPreference = $false
-          gh release delete v0.1.0 --repo $env:GITHUB_REPOSITORY --yes --cleanup-tag *> $null
-          gh api --method DELETE "repos/$env:GITHUB_REPOSITORY/git/refs/tags/v0.1.0" *> $null
-          exit 0
-
-      - name: Publish v0.1.0
-        shell: pwsh
-        run: |
-          gh release create v0.1.0 `
-            ClearTune-windows-x64.zip `
-            SHA256SUMS.txt `
-            --repo $env:GITHUB_REPOSITORY `
-            --target ebbf67d5e5b3180e554f21549875c90e31953a2e `
-            --title 'ClearTune 0.1.0' `
-            --notes-file RELEASE_NOTES.md
-
-      - name: Download and verify published asset
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path published | Out-Null
-          gh release download v0.1.0 `
-            --repo $env:GITHUB_REPOSITORY `
-            --pattern ClearTune-windows-x64.zip `
-            --dir published
-
-          $publishedHash = (Get-FileHash published/ClearTune-windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($publishedHash -ne $env:ZIP_SHA256) {
-            throw "Published ZIP mismatch: expected $env:ZIP_SHA256, got $publishedHash."
-          }
-
-      - name: Record verified republish
-        shell: pwsh
-        run: |
-          git switch main
-          git pull --ff-only origin main
-
-          $status = [ordered]@{
-            result = 'success'
-            source_commit = 'ebbf67d5e5b3180e554f21549875c90e31953a2e'
-            icon_sha256 = '605daf15aa75dfc5b2c69728d56ce06bc6356a24040891a44f572c147cd65dfa'
-            ico_frames = @(16, 32, 256)
-            zip_sha256 = $env:ZIP_SHA256
-            token_source = 'github.token'
-            run_id = $env:GITHUB_RUN_ID
-          } | ConvertTo-Json
-          $status | Set-Content .github/release-v0.1.0-fixed-icon-status.json
-
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/release-v0.1.0-fixed-icon-status.json
-          git commit -m 'chore: record fixed-icon v0.1.0 republish'
-          git push origin main
