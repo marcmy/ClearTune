@@ -1,0 +1,150 @@
+name: Republish ClearTune 0.1.0 (verified)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'release: republish v0.1.0 (verified)'
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Configure
+        run: cmake -S . -B build -A x64
+
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --parallel 2>&1 | Tee-Object -FilePath windows-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package | Out-Null
+          Copy-Item build/Release/ClearTune.exe package/
+          Copy-Item README.md, LICENSE package/
+          Compress-Archive -Path package/* -DestinationPath ClearTune-windows-x64.zip
+
+          $hash = (Get-FileHash ClearTune-windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  ClearTune-windows-x64.zip" | Set-Content -Encoding utf8NoBOM -NoNewline SHA256SUMS.txt
+
+          @'
+          # ClearTune 0.1.0
+
+          The first public release of ClearTune: a native C++/Win32 ClearType calibration wizard with genuine System, Light, and Dark sample polarity.
+
+          ## Highlights
+
+          - Stock-compatible ClearType sample stages and live preview behavior
+          - System, Light, and Dark calibration themes
+          - One-click opposite-polarity comparison without changing the selection
+          - Interactive monitor map using the real Windows display arrangement
+          - EDID/DisplayConfig monitor model names when available
+          - Per-monitor Light/Dark review when tuning multiple displays
+          - Exact final preview of the settings that Finish will save
+          - Transactional Back and Cancel behavior with launch-state rollback
+          - Native multi-resolution Windows application icon
+          - No administrator rights, service, updater, telemetry, or third-party runtime
+
+          Download `ClearTune-windows-x64.zip`, extract it, and run `ClearTune.exe`.
+          '@ | Set-Content -Encoding utf8NoBOM RELEASE_NOTES.md
+
+      - name: Replace release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view v0.1.0 *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload v0.1.0 ClearTune-windows-x64.zip SHA256SUMS.txt --clobber
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            gh release edit v0.1.0 --title "ClearTune 0.1.0" --notes-file RELEASE_NOTES.md
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          else {
+            gh release create v0.1.0 ClearTune-windows-x64.zip SHA256SUMS.txt --target $env:GITHUB_SHA --title "ClearTune 0.1.0" --notes-file RELEASE_NOTES.md
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+          gh api --method PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/v0.1.0" -f "sha=$env:GITHUB_SHA" -F force=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify published files
+        id: verify
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Path verify | Out-Null
+          gh release download v0.1.0 --dir verify --pattern ClearTune-windows-x64.zip --pattern SHA256SUMS.txt --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $sumLine = (Get-Content verify/SHA256SUMS.txt -Raw).Trim()
+          $expected = ($sumLine -split '\s+')[0].ToLowerInvariant()
+          $actual = (Get-FileHash verify/ClearTune-windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "Published ZIP hash mismatch: expected $expected, got $actual"
+          }
+
+          $release = gh release view v0.1.0 --json tagName,isDraft,isPrerelease,url,assets | ConvertFrom-Json
+          if ($release.tagName -ne 'v0.1.0' -or $release.isDraft -or $release.isPrerelease) {
+            throw 'Published release metadata is invalid.'
+          }
+
+          $assetNames = @($release.assets | ForEach-Object name)
+          foreach ($required in @('ClearTune-windows-x64.zip', 'SHA256SUMS.txt')) {
+            if ($required -notin $assetNames) { throw "Missing release asset: $required" }
+          }
+
+          "sha256=$actual" >> $env:GITHUB_OUTPUT
+          "release_url=$($release.url)" >> $env:GITHUB_OUTPUT
+
+      - name: Record verified success
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERIFIED_SHA256: ${{ steps.verify.outputs.sha256 }}
+          RELEASE_URL: ${{ steps.verify.outputs.release_url }}
+        run: |
+          $receipt = [ordered]@{
+            tag = 'v0.1.0'
+            source_sha = $env:GITHUB_SHA
+            run_id = $env:GITHUB_RUN_ID
+            run_attempt = $env:GITHUB_RUN_ATTEMPT
+            zip_sha256 = $env:VERIFIED_SHA256
+            release_url = $env:RELEASE_URL
+            verified_at_utc = [DateTime]::UtcNow.ToString('o')
+          } | ConvertTo-Json
+
+          $bytes = [Text.Encoding]::UTF8.GetBytes($receipt + "`n")
+          $encoded = [Convert]::ToBase64String($bytes)
+          $path = '.github/release-v0.1.0-success.json'
+          $apiPath = "repos/$env:GITHUB_REPOSITORY/contents/$path"
+          $existingSha = gh api "$apiPath?ref=main" --jq .sha 2>$null
+
+          $arguments = @(
+            'api', '--method', 'PUT', $apiPath,
+            '-f', 'message=chore: record verified v0.1.0 republish',
+            '-f', "content=$encoded",
+            '-f', 'branch=main'
+          )
+          if ($existingSha) {
+            $arguments += @('-f', "sha=$existingSha")
+          }
+
+          & gh @arguments
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
