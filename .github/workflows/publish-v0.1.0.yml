@@ -90,7 +90,7 @@ jobs:
       - name: Create v0.1.0 tag
         shell: pwsh
         run: |
-          git tag -f v0.1.0 ebbf67d5e5b3180e554f21549875c90e31953a2e
+          git tag -f v0.1.0 5ddb6c89dd5b0bcd76c81bb4bd479e0a41d8287c
           git push origin refs/tags/v0.1.0
 
       - name: Publish v0.1.0 from existing tag
@@ -125,7 +125,7 @@ jobs:
 
           $status = [ordered]@{
             result = 'success'
-            source_commit = 'ebbf67d5e5b3180e554f21549875c90e31953a2e'
+            source_commit = '5ddb6c89dd5b0bcd76c81bb4bd479e0a41d8287c'
             icon_sha256 = '605daf15aa75dfc5b2c69728d56ce06bc6356a24040891a44f572c147cd65dfa'
             ico_frames = @(16, 32, 256)
             zip_sha256 = $env:ZIP_SHA256
