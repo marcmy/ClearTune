@@ -89,20 +89,29 @@ jobs:
           Download `ClearTune-windows-x64.zip`, extract it, and run `ClearTune.exe`.
           '@ | Set-Content RELEASE_NOTES.md
 
-      - name: Replace v0.1.0 release
+      - name: Remove previous release and tag if present
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete v0.1.0 --yes --cleanup-tag 2>$null
-          gh api --method DELETE "repos/$env:GITHUB_REPOSITORY/git/refs/tags/v0.1.0" 2>$null
+          $PSNativeCommandUseErrorActionPreference = $false
+          gh release delete v0.1.0 --repo $env:GITHUB_REPOSITORY --yes --cleanup-tag *> $null
+          gh api --method DELETE "repos/$env:GITHUB_REPOSITORY/git/refs/tags/v0.1.0" *> $null
+          exit 0
 
+      - name: Publish v0.1.0
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           gh release create v0.1.0 `
             ClearTune-windows-x64.zip `
             SHA256SUMS.txt `
+            --repo $env:GITHUB_REPOSITORY `
             --target ebbf67d5e5b3180e554f21549875c90e31953a2e `
             --title 'ClearTune 0.1.0' `
             --notes-file RELEASE_NOTES.md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Download and verify published asset
         shell: pwsh
@@ -111,6 +120,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path published | Out-Null
           gh release download v0.1.0 `
+            --repo $env:GITHUB_REPOSITORY `
             --pattern ClearTune-windows-x64.zip `
             --dir published
 
@@ -133,5 +143,5 @@ jobs:
           - Published ZIP SHA-256: `$env:ZIP_SHA256`
           - Release: https://github.com/$env:GITHUB_REPOSITORY/releases/tag/v0.1.0
           "@
-          gh issue comment ${{ github.event.issue.number }} --body $body
-          gh issue close ${{ github.event.issue.number }} --reason completed
+          gh issue comment ${{ github.event.issue.number }} --repo $env:GITHUB_REPOSITORY --body $body
+          gh issue close ${{ github.event.issue.number }} --repo $env:GITHUB_REPOSITORY --reason completed
