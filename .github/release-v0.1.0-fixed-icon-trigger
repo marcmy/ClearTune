@@ -1,1 +1,1 @@
-Build v0.1.0, create its tag over Git, and publish the release from that verified existing tag.
+Build, test, package, tag, and publish v0.1.0 from clean fixed-icon commit 5ddb6c89.
