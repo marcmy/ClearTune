@@ -15,10 +15,10 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Check out verified icon commit
+      - name: Check out clean fixed-icon release commit
         uses: actions/checkout@v7
         with:
-          ref: ebbf67d5e5b3180e554f21549875c90e31953a2e
+          ref: 5ddb6c89dd5b0bcd76c81bb4bd479e0a41d8287c
           fetch-depth: 0
 
       - name: Verify release source icon
