@@ -104,14 +104,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v0.1.0 `
+          $PSNativeCommandUseErrorActionPreference = $false
+          $publishOutput = & gh release create v0.1.0 `
             ClearTune-windows-x64.zip `
             SHA256SUMS.txt `
             --repo $env:GITHUB_REPOSITORY `
             --target ebbf67d5e5b3180e554f21549875c90e31953a2e `
             --title 'ClearTune 0.1.0' `
-            --notes-file RELEASE_NOTES.md
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            --notes-file RELEASE_NOTES.md 2>&1
+          $publishCode = $LASTEXITCODE
+          $publishText = ($publishOutput | Out-String).Trim()
+
+          if ($publishCode -ne 0) {
+            $body = "Release creation failed with exit code $publishCode.`n`n$publishText"
+            gh issue comment ${{ github.event.issue.number }} `
+              --repo $env:GITHUB_REPOSITORY `
+              --body $body
+            exit $publishCode
+          }
+
+          $publishText
 
       - name: Download and verify published asset
         shell: pwsh
@@ -137,10 +149,10 @@ jobs:
           $body = @"
           Verified republish succeeded.
 
-          - Source commit: `ebbf67d5e5b3180e554f21549875c90e31953a2e`
-          - Icon SHA-256: `605daf15aa75dfc5b2c69728d56ce06bc6356a24040891a44f572c147cd65dfa`
-          - ICO frames: `16, 32, 256`
-          - Published ZIP SHA-256: `$env:ZIP_SHA256`
+          - Source commit: ebbf67d5e5b3180e554f21549875c90e31953a2e
+          - Icon SHA-256: 605daf15aa75dfc5b2c69728d56ce06bc6356a24040891a44f572c147cd65dfa
+          - ICO frames: 16, 32, 256
+          - Published ZIP SHA-256: $env:ZIP_SHA256
           - Release: https://github.com/$env:GITHUB_REPOSITORY/releases/tag/v0.1.0
           "@
           gh issue comment ${{ github.event.issue.number }} --repo $env:GITHUB_REPOSITORY --body $body
