@@ -1,0 +1,13 @@
+{
+  "result": "success",
+  "source_commit": "5ddb6c89dd5b0bcd76c81bb4bd479e0a41d8287c",
+  "icon_sha256": "605daf15aa75dfc5b2c69728d56ce06bc6356a24040891a44f572c147cd65dfa",
+  "ico_frames": [
+    16,
+    32,
+    256
+  ],
+  "zip_sha256": "da1306dde93fccf21392efe0c33e30848f195ef550ea2fab81d8b5c8002b81b4",
+  "build_run_id": "29427141769",
+  "publish_run_id": "29427236293"
+}
