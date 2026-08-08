@@ -28,7 +28,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download verified build artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ClearTune-v0.1.0-windows-x64
           path: release
