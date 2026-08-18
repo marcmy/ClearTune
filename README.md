@@ -6,7 +6,7 @@ ClearTune is a clean-room, native C++/Win32 ClearType calibration wizard with ge
 
 Windows' built-in ClearType tuner presents dark text on a light background. ClearTune keeps the same uncomplicated **choose the clearest sample** flow, but lets the calibration surface use **System**, **Light**, or **Dark** mode. You can tune every active monitor or select a single display from an interactive map of the real Windows display arrangement.
 
-> **Project status:** early alpha. The portable core and Windows x64 builds are tested in GitHub Actions; real-monitor visual validation is still required before publishing a release.
+> **Project status:** early alpha. The portable core and Windows x64 builds are tested in GitHub Actions; real-monitor visual validation is still recommended.
 
 ## Recommended workflow
 
